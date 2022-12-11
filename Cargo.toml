@@ -1,0 +1,6 @@
+[workspace]
+members = [
+  "crates/flashpoint",
+  "crates/flashpoint-core",
+  "crates/flashpoint-config"
+]
