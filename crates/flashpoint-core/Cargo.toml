@@ -10,8 +10,13 @@ bench = false
 
 [features]
 services = []
+websocket = []
 
 [dependencies]
-tokio = { version = "1.23.0", features = ["macros", "fs", "io-util", "time"] }
+tokio = { version = "1.23.0", features = ["macros", "fs", "sync", "io-util", "time"] }
 flashpoint-config = { version = "0.1.0", path = "../flashpoint-config" }
 serde_json = "1.0.89"
+tokio-tungstenite = "*"
+futures-channel = "0.3.25"
+futures-util = "0.3.25"
+ctrlc = "3.2.4"

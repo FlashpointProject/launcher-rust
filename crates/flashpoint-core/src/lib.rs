@@ -1,12 +1,23 @@
 use flashpoint_config::types::{Config, Preferences, Services};
+use futures_channel::mpsc::{unbounded, UnboundedSender};
+use futures_util::StreamExt;
+use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::Mutex;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
+use tokio::net::{TcpListener, TcpStream};
+use tokio_tungstenite::tungstenite::Message;
 
 pub mod signals;
 use signals::*;
 
-#[derive(Clone, Copy)]
+type Tx = UnboundedSender<Message>;
+type PeerMap = Arc<Mutex<HashMap<SocketAddr, Tx>>>;
+
+#[derive(Clone, Copy, Debug)]
 pub enum InitLoad {
   Services,
   Database,
@@ -17,7 +28,6 @@ pub enum InitLoad {
 }
 
 signal!(ExitSignal<ExitRecv, i32>);
-signal!(OnDidConnectSignal<OnDidConnectRecv, u8>);
 signal!(InitLoadSignal<InitLoadRecv, InitLoad>);
 
 pub struct FlashpointSignals {
@@ -71,7 +81,7 @@ impl FlashpointService {
     }
   }
 
-  pub fn init(&mut self) {
+  pub async fn init(&mut self) {
     // TODO
     self.signals.init_load.emit(InitLoad::Services);
     // TODO
@@ -84,6 +94,33 @@ impl FlashpointService {
     self.signals.init_load.emit(InitLoad::ExecMappings);
     // TODO
     self.signals.init_load.emit(InitLoad::Curate);
+  }
+
+  #[cfg(feature = "websocket")]
+  pub async fn listen(self) {
+    // Create listener state
+    let fp_state = Arc::new(Mutex::new(self));
+    let state = PeerMap::new(Mutex::new(HashMap::new()));
+    let addr = "127.0.0.1:9001";
+    let listener = TcpListener::bind(addr)
+      .await
+      .expect("Failed to bind websocket listener");
+
+    println!("Listening on: {}", addr);
+
+    // Capture Ctrl+C to trigger Exit signal on FlashpointService
+    let ctrlc_fp_state = fp_state.clone();
+    ctrlc::set_handler(move || {
+      println!("Received Exit Signal, shutting down...");
+      ctrlc_fp_state.lock().unwrap().signals.exit_code.emit(0);
+    })
+    .expect("Error setting Ctrl-C handler");
+
+    // Each connection spawns own tokio task
+    while let Ok((stream, addr)) = listener.accept().await {
+      let fp_lock = fp_state.clone();
+      tokio::spawn(handle_connection(fp_lock, state.clone(), stream, addr));
+    }
   }
 
   pub fn exit(&self) {
@@ -134,4 +171,47 @@ async fn load_prefs_file(path: &str) -> Result<Preferences, Box<dyn std::error::
   file.read_to_end(&mut contents).await?;
   let prefs: Preferences = serde_json::from_str(std::str::from_utf8(&contents).unwrap())?;
   Ok(prefs)
+}
+
+#[cfg(feature = "websocket")]
+async fn handle_connection(
+  fp_mutex_guard: Arc<Mutex<FlashpointService>>,
+  peer_map: PeerMap,
+  raw_stream: TcpStream,
+  addr: SocketAddr,
+) {
+  use futures_util::{future, pin_mut, TryStreamExt};
+
+  println!("Incoming TCP connection from: {}", addr);
+
+  let ws_stream = tokio_tungstenite::accept_async(raw_stream)
+    .await
+    .expect("Error during the websocket handshake occurred");
+
+  println!("WebSocket connection established: {}", addr);
+
+  // Insert the write part of this peer to the peer map.
+  let (tx, rx) = unbounded();
+  peer_map.lock().unwrap().insert(addr, tx);
+
+  let (outgoing, incoming) = ws_stream.split();
+
+  let broadcast_incoming = incoming.try_for_each(|msg| {
+    println!("{}: {:?}", &addr, msg.to_text().unwrap());
+    let fp_lock = fp_mutex_guard.clone();
+    async move {
+      // Take control of fp state
+      let fp = fp_lock.lock().unwrap();
+      println!("JSON Folder Path: {}", fp.prefs.json_folder_path);
+      Ok(())
+    }
+  });
+
+  let receive_from_others = rx.map(Ok).forward(outgoing);
+
+  pin_mut!(broadcast_incoming, receive_from_others);
+  future::select(broadcast_incoming, receive_from_others).await;
+
+  println!("{} disconnected", &addr);
+  peer_map.lock().unwrap().remove(&addr);
 }
