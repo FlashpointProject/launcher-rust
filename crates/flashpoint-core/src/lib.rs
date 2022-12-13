@@ -1,21 +1,35 @@
-use flashpoint_config::types::{Config, Preferences, Services};
-use futures_channel::mpsc::{unbounded, UnboundedSender};
-use futures_util::StreamExt;
+use cfg_if::cfg_if;
+use flashpoint_config::types::{Config, Preferences};
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::path::Path;
-use std::sync::Arc;
-use std::sync::Mutex;
 use tokio::fs::File;
-use tokio::io::AsyncReadExt;
-use tokio::net::{TcpListener, TcpStream};
-use tokio_tungstenite::tungstenite::Message;
+
+cfg_if!(
+  if #[cfg(feature = "services")] {
+    use flashpoint_config::types::Services;
+  }
+);
+cfg_if!(
+  if #[cfg(feature = "websocket")] {
+    mod ws;
+    use ws::*;
+    use std::sync::Arc;
+    use std::sync::Mutex;
+    use tokio::io::AsyncReadExt;
+    use tokio::net::{TcpListener, TcpStream};
+    use tokio_tungstenite::tungstenite::Message;
+    use futures_channel::mpsc::{unbounded, UnboundedSender};
+    use std::net::SocketAddr;
+    use futures_util::StreamExt;
+    type Tx = UnboundedSender<Message>;
+    type PeerMap = Arc<Mutex<HashMap<SocketAddr, Tx>>>;
+  }
+);
 
 pub mod signals;
 use signals::*;
-
-type Tx = UnboundedSender<Message>;
-type PeerMap = Arc<Mutex<HashMap<SocketAddr, Tx>>>;
+#[cfg(feature = "websocket")]
+pub struct WebsocketMessage {}
 
 #[derive(Clone, Copy, Debug)]
 pub enum InitLoad {
@@ -42,6 +56,8 @@ pub struct FlashpointService {
   #[cfg(feature = "services")]
   pub services_info: Services,
   pub signals: FlashpointSignals,
+  #[cfg(feature = "websocket")]
+  pub registers: WebsocketRegisters,
 }
 
 impl FlashpointService {
@@ -68,6 +84,12 @@ impl FlashpointService {
     println!("Prefs Path: {}", prefs_path);
     let prefs = load_prefs_file(&prefs_path).await.unwrap();
 
+    let registers = WebsocketRegisters {
+      ping: WebsocketRegister {
+        cls: Box::new(|ping| ping),
+      },
+    };
+
     Self {
       base_path: base_path_str.clone(),
       config,
@@ -78,6 +100,7 @@ impl FlashpointService {
         exit_code: ExitSignal::new(),
         init_load: InitLoadSignal::new(),
       },
+      registers,
     }
   }
 

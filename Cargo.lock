@@ -117,6 +117,7 @@ dependencies = [
 name = "flashpoint-core"
 version = "0.1.0"
 dependencies = [
+ "cfg-if",
  "ctrlc",
  "flashpoint-config",
  "futures-channel",

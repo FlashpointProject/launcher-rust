@@ -48,7 +48,7 @@ macro_rules! signal {
       type RecType = $rectype;
 
       fn emit(&self, data: Self::Data) {
-        self.recs.iter().for_each(|r| r.on_emit(data));
+        self.recs.iter().for_each(|r| r.on_emit(data.clone()));
       }
 
       fn connect(
@@ -66,6 +66,10 @@ macro_rules! signal {
       }
     }
   };
+}
+
+pub trait WSRegister {
+  type Data;
 }
 
 pub trait EventReceiver {
