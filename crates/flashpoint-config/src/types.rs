@@ -1,9 +1,22 @@
+use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
 
-use serde::{Serialize, Deserialize};
-use serde_repr::{Serialize_repr, Deserialize_repr};
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BackProcessInfo {
+  #[serde(default)]
+  name: String,
+  #[serde(default)]
+  mad4fp: bool,
+  path: String,
+  filename: String,
+  #[serde(default)]
+  arguments: Vec<String>,
+  #[serde(default)]
+  kill: bool,
+}
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct MainWindow {
   #[serde(default)]
@@ -15,17 +28,17 @@ pub struct MainWindow {
   #[serde(default)]
   pub height: u32,
   #[serde(default)]
-  pub maximized: bool
+  pub maximized: bool,
 }
 
-#[derive(Serialize_repr, Deserialize_repr, Debug)]
+#[derive(Serialize_repr, Deserialize_repr, Clone, Debug)]
 #[repr(u8)]
 pub enum BrowsePageLayout {
   List = 0,
-  Grid = 1
+  Grid = 1,
 }
 
-#[derive(Serialize_repr, Deserialize_repr, Debug, Hash, Eq, PartialEq)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Hash, Eq, PartialEq)]
 #[repr(u8)]
 pub enum LogLevel {
   Trace = 0,
@@ -33,17 +46,17 @@ pub enum LogLevel {
   Info = 2,
   Warn = 3,
   Error = 4,
-  Silent = 5
+  Silent = 5,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AppPathOverride {
   pub path: String,
   pub r#override: String,
-  pub enabled: bool
+  pub enabled: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TagFilterGroup {
   pub name: String,
@@ -55,7 +68,7 @@ pub struct TagFilterGroup {
   pub extreme: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ShortcutsCurate {
   pub prev: Vec<String>,
@@ -71,12 +84,12 @@ pub struct ShortcutsCurate {
   pub run_mad4fp: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Shortcuts {
   pub curate: ShortcutsCurate,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
   #[serde(default = "flashpoint_path")]
@@ -102,10 +115,10 @@ pub struct Config {
   #[serde(default = "gotd_url")]
   pub gotd_url: String,
   #[serde(default)]
-  pub gotd_show_all: bool
+  pub gotd_show_all: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Preferences {
   #[serde(default = "image_folder_path")]
@@ -206,62 +219,71 @@ pub struct Preferences {
   pub offline_manual: String,
 }
 
-fn image_folder_path () -> String {
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Services {
+  pub server: Vec<BackProcessInfo>,
+  pub daemon: Vec<BackProcessInfo>,
+  pub start: Vec<BackProcessInfo>,
+  pub stop: Vec<BackProcessInfo>,
+  pub watch: Vec<String>,
+}
+
+fn image_folder_path() -> String {
   "Data/Images".to_string()
 }
 
-fn logo_folder_path () -> String {
+fn logo_folder_path() -> String {
   "Data/Logos".to_string()
 }
 
-fn playlist_folder_path () -> String {
+fn playlist_folder_path() -> String {
   "Data/Playlists".to_string()
 }
 
-fn json_folder_path () -> String {
+fn json_folder_path() -> String {
   "Data".to_string()
 }
-fn htdocs_folder_path () -> String {
+fn htdocs_folder_path() -> String {
   "Legacy/htdocs".to_string()
 }
 
-fn platforms_folder_path () -> String {
+fn platforms_folder_path() -> String {
   "Data/Platforms".to_string()
 }
 
-fn theme_folder_path () -> String {
+fn theme_folder_path() -> String {
   "Data/Themes".to_string()
 }
 
-fn logosets_folder_path () -> String {
+fn logosets_folder_path() -> String {
   "Data/LogoSets".to_string()
 }
 
-fn metaedits_folder_path () -> String {
+fn metaedits_folder_path() -> String {
   "Data/MetaEdits".to_string()
 }
 
-fn extensions_folder_path () -> String {
+fn extensions_folder_path() -> String {
   "Data/Extensions".to_string()
 }
 
-fn data_packs_folder_path () -> String {
+fn data_packs_folder_path() -> String {
   "Data/Games".to_string()
 }
 
-fn browse_page_game_scale () -> f32 {
+fn browse_page_game_scale() -> f32 {
   0.087
 }
 
-fn fallback_language () -> String {
+fn fallback_language() -> String {
   "en".to_string()
 }
 
-fn language () -> String {
+fn language() -> String {
   "<auto>".to_string()
 }
 
-fn main_window () -> MainWindow {
+fn main_window() -> MainWindow {
   MainWindow {
     width: 1280,
     height: 720,
@@ -271,8 +293,8 @@ fn main_window () -> MainWindow {
   }
 }
 
-fn shortcuts () -> Shortcuts {
-  Shortcuts { 
+fn shortcuts() -> Shortcuts {
+  Shortcuts {
     curate: ShortcutsCurate {
       prev: vec!["ctrl+arrowup".to_string(), "cmd+arrowup".to_string()],
       next: vec!["ctrl+arrowdown".to_string(), "cmd+arrowdown".to_string()],
@@ -284,11 +306,12 @@ fn shortcuts () -> Shortcuts {
       import_curs: vec!["ctrl+i".to_string(), "cmd+i".to_string()],
       refresh: vec!["ctrl+r".to_string(), "cmd+r".to_string()],
       run: vec!["ctrl+t".to_string(), "cmd+t".to_string()],
-      run_mad4fp: vec!["ctrl+shift+t".to_string(), "cmd+shift+t".to_string()] }
+      run_mad4fp: vec!["ctrl+shift+t".to_string(), "cmd+shift+t".to_string()],
+    },
   }
 }
 
-fn show_log_source () -> HashMap<LogLevel, bool> {
+fn show_log_source() -> HashMap<LogLevel, bool> {
   let mut map = HashMap::new();
   map.insert(LogLevel::Info, true);
   map.insert(LogLevel::Warn, true);
@@ -298,76 +321,74 @@ fn show_log_source () -> HashMap<LogLevel, bool> {
   map
 }
 
-fn default_library () -> String {
+fn default_library() -> String {
   "arcade".to_string()
 }
 
-fn browse_page_layout () -> BrowsePageLayout {
+fn browse_page_layout() -> BrowsePageLayout {
   BrowsePageLayout::List
 }
 
-fn sidebar_width () -> u32 {
+fn sidebar_width() -> u32 {
   320
 }
 
-fn current_theme () -> String {
+fn current_theme() -> String {
   "Metal\\theme.css".to_string()
 }
 
-fn games_order_by () -> String {
+fn games_order_by() -> String {
   "title".to_string()
 }
 
-fn games_order () -> String {
+fn games_order() -> String {
   "ASC".to_string()
 }
 
-fn on_demand_base_url () -> String {
+fn on_demand_base_url() -> String {
   "https://infinity.unstable.life/Flashpoint/Data/Images/".to_string()
 }
 
-fn browser_mode_proxy () -> String {
+fn browser_mode_proxy() -> String {
   "localhost:22500".to_string()
 }
 
-fn online_manual () -> String {
+fn online_manual() -> String {
   "https://flashpointproject.github.io/manual/".to_string()
 }
 
-
-
-fn bool_true () -> bool {
+fn bool_true() -> bool {
   true
 }
 
-fn flashpoint_path () -> String {
+fn flashpoint_path() -> String {
   "./".to_string()
 }
 
-fn logs_base_url () -> String {
+fn logs_base_url() -> String {
   "https://logs.unstable.life/".to_string()
 }
 
-fn server () -> String {
+fn server() -> String {
   "Apache Webserver".to_string()
 }
 
-fn back_port_min () -> u16 {
+fn back_port_min() -> u16 {
   12001
 }
 
-fn back_port_max () -> u16 {
+fn back_port_max() -> u16 {
   12100
 }
 
-fn images_port_min () -> u16 {
+fn images_port_min() -> u16 {
   12101
 }
 
-fn images_port_max () -> u16 {
+fn images_port_max() -> u16 {
   12200
 }
 
-fn gotd_url () -> String {
+fn gotd_url() -> String {
   "https://download.unstable.life/gotd.json".to_string()
 }

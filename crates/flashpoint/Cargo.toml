@@ -9,5 +9,7 @@ edition = "2021"
 argparse = "0.2.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.89"
-flashpoint-core = { version = "0.1.0", path = "../flashpoint-core" }
+flashpoint-core = { version = "0.1.0", path = "../flashpoint-core", features = ["services"] }
 flashpoint-config = { version = "0.1.0", path = "../flashpoint-config" }
+tokio = { version = "1.23.0", features = ["macros", "sync", "rt", "rt-multi-thread"] }
+ctrlc = "3.2.4"

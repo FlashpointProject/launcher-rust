@@ -8,5 +8,10 @@ edition = "2021"
 [lib]
 bench = false
 
+[features]
+services = []
+
 [dependencies]
+tokio = { version = "1.23.0", features = ["macros", "fs", "io-util", "time"] }
 flashpoint-config = { version = "0.1.0", path = "../flashpoint-config" }
+serde_json = "1.0.89"
