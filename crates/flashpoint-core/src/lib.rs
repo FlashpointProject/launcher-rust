@@ -1,6 +1,5 @@
 use cfg_if::cfg_if;
 use flashpoint_config::types::{Config, Preferences};
-use std::collections::HashMap;
 use std::path::Path;
 use tokio::fs::File;
 
@@ -13,6 +12,7 @@ cfg_if!(
   if #[cfg(feature = "websocket")] {
     mod ws;
     use ws::*;
+    use std::collections::HashMap;
     use std::sync::Arc;
     use std::sync::Mutex;
     use tokio::io::AsyncReadExt;
@@ -128,8 +128,11 @@ impl FlashpointService {
         #[cfg(feature = "services")]
         services_info: fp_service.services_info.clone(),
       }),
-      all_games: Box::new(|_, _: ()| GameVecRes {
-        data: flashpoint_database::get_games(r"C:\Users\colin\Downloads\Flashpoint 11 Infinity\Data\flashpoint.sqlite"),
+      all_games: Box::new(|_| GameVecRes {
+        data: flashpoint_database::get_all_games(r"C:\Users\colin\Downloads\Flashpoint 11 Infinity\Data\flashpoint.sqlite"),
+      }),
+      add: Box::new(|_, data| NumberRes {
+        data: data.first + data.second,
       }),
     }));
 
@@ -243,9 +246,8 @@ async fn handle_connection(
     let registers = registers.clone();
     let peer_map = peer_map.clone();
     async move {
-      // Take control of registers and fp states
+      // Take control of registers and peer states
       let registers = registers.lock().unwrap();
-      let mut fp_service = fp_service.lock().unwrap();
       let peers = peer_map.lock().unwrap();
 
       // Deserialize incoming message
@@ -254,21 +256,10 @@ async fn handle_connection(
         Ok(rec_msg) => {
           let op = rec_msg["op"].as_str().unwrap();
           let data = rec_msg["data"].clone();
-          let res_str: String;
-          match op {
-            "init" => {
-              println!("Init Data");
-              ws_execute!(registers.init_data, res_str, fp_service);
-            }
-            "all_games" => {
-              println!("All Games");
-              ws_execute!(registers.all_games, res_str, fp_service);
-            }
-            _ => {
-              res_str = "{ \"error\": \"unknown operation\" }".to_string();
-            }
-          };
-          let res_msg = Message::text(res_str);
+
+          // Execute the registered function
+          let res = execute_register(registers, fp_service, op, data);
+          let res_msg = Message::text(res.unwrap_or_else(|err| format!("{{ \"error\": \"{:?}\" }}", err)));
 
           // Broadcast response only to ourselves
           let broadcast_recipients = peers
@@ -282,6 +273,17 @@ async fn handle_connection(
         }
         Err(e) => {
           println!("Error deserializing message: {}", e);
+          let res_msg = Message::text("{ \"error\": \"error deserializing message\" }".to_string());
+
+          // Broadcast response only to ourselves
+          let broadcast_recipients = peers
+            .iter()
+            .filter(|(peer_addr, _)| peer_addr == &&addr)
+            .map(|(_, ws_sink)| ws_sink);
+
+          for recp in broadcast_recipients {
+            recp.unbounded_send(res_msg.clone()).unwrap();
+          }
         }
       }
 
@@ -296,4 +298,32 @@ async fn handle_connection(
 
   println!("{} disconnected", &addr);
   peer_map.lock().unwrap().remove(&addr);
+}
+
+#[cfg(feature = "websocket")]
+fn execute_register(
+  registers: std::sync::MutexGuard<WebsocketRegisters>,
+  fp_service: Arc<Mutex<FlashpointService>>,
+  op: &str,
+  data: serde_json::Value,
+) -> Result<String, Box<dyn std::error::Error>> {
+  let res_str: String;
+  match op {
+    "init" => {
+      println!("Init Data");
+      ws_execute!(registers.init_data, res_str, fp_service);
+    }
+    "all_games" => {
+      println!("All Games");
+      ws_execute_alone!(registers.all_games, res_str);
+    }
+    "add" => {
+      println!("Add");
+      ws_execute!(&data, registers.add, res_str, fp_service, AddRecv);
+    }
+    _ => {
+      res_str = "{ \"error\": \"unknown operation\" }".to_string();
+    }
+  };
+  Ok(res_str)
 }
