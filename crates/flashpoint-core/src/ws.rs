@@ -1,10 +1,9 @@
 use crate::FlashpointService;
 use flashpoint_config::types::*;
+use flashpoint_database::models::Game;
 use serde::{Deserialize, Serialize};
 use std::sync::MutexGuard;
 
-// pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
-// pub type WebsocketRegisterAsync<RecType, ResType> = Box<dyn Fn(Arc<Mutex<FlashpointService>>, RecType) -> BoxFuture<ResType>>;
 pub type WebsocketRegister<RecType, ResType> = Box<dyn Fn(MutexGuard<FlashpointService>, RecType) -> ResType + Send>;
 
 #[derive(Debug, Serialize)]
@@ -30,8 +29,14 @@ pub struct NumberRes {
   pub data: i32,
 }
 
+#[derive(Debug, Serialize)]
+pub struct GameVecRes {
+  pub data: Vec<Game>,
+}
+
 pub struct WebsocketRegisters {
   pub init_data: WebsocketRegister<(), InitDataRes>,
+  pub all_games: WebsocketRegister<(), GameVecRes>,
 }
 
 // #[macro_export]
@@ -65,8 +70,8 @@ macro_rules! ws_execute {
   };
   // JSON rec type
   ($func_data:expr, $register:expr, $res_str:expr, $fp_service:expr, $rectype:ident) => {
-    let data_str = serde_json::to_string($func_data).unwrap();
-    let data: $rectype = serde_json::from_str(data_str.as_str()).unwrap();
+    let data_str = serde_json::to_string($func_data).unwrap(); // TODO: Make safe
+    let data: $rectype = serde_json::from_str(data_str.as_str()).unwrap(); // TODO: Make safe
     ws_execute!(data, $register, $res_str, $fp_service);
   };
   // No Data
@@ -79,6 +84,6 @@ macro_rules! ws_execute {
       $fp_service.init();
     }
     let res = ($register)($fp_service, $func_data);
-    $res_str = serde_json::to_string(&res).unwrap();
+    $res_str = serde_json::to_string(&res).unwrap(); // TODO: Make safe
   };
 }

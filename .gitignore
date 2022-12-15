@@ -1,1 +1,3 @@
 /target
+/crates/flashpoint-database/.env
+/crates/flashpoint-database/test.db

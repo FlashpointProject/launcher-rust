@@ -2,5 +2,6 @@
 members = [
   "crates/flashpoint",
   "crates/flashpoint-core",
-  "crates/flashpoint-config"
+  "crates/flashpoint-config",
+  "crates/flashpoint-database"
 ]

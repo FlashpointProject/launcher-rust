@@ -128,6 +128,9 @@ impl FlashpointService {
         #[cfg(feature = "services")]
         services_info: fp_service.services_info.clone(),
       }),
+      all_games: Box::new(|_, _: ()| GameVecRes {
+        data: flashpoint_database::get_games(r"C:\Users\colin\Downloads\Flashpoint 11 Infinity\Data\flashpoint.sqlite"),
+      }),
     }));
 
     // Create listener state
@@ -256,6 +259,10 @@ async fn handle_connection(
             "init" => {
               println!("Init Data");
               ws_execute!(registers.init_data, res_str, fp_service);
+            }
+            "all_games" => {
+              println!("All Games");
+              ws_execute!(registers.all_games, res_str, fp_service);
             }
             _ => {
               res_str = "{ \"error\": \"unknown operation\" }".to_string();
