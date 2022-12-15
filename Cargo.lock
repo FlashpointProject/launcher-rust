@@ -122,6 +122,7 @@ dependencies = [
  "flashpoint-config",
  "futures-channel",
  "futures-util",
+ "serde",
  "serde_json",
  "tokio",
  "tokio-tungstenite",

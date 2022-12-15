@@ -28,8 +28,6 @@ cfg_if!(
 
 pub mod signals;
 use signals::*;
-#[cfg(feature = "websocket")]
-pub struct WebsocketMessage {}
 
 #[derive(Clone, Copy, Debug)]
 pub enum InitLoad {
@@ -50,26 +48,20 @@ pub struct FlashpointSignals {
 }
 
 pub struct FlashpointService {
+  pub initialized: bool,
   pub base_path: String,
   pub config: Config,
   pub prefs: Preferences,
   #[cfg(feature = "services")]
   pub services_info: Services,
   pub signals: FlashpointSignals,
-  #[cfg(feature = "websocket")]
-  pub registers: WebsocketRegisters,
 }
 
 impl FlashpointService {
   pub async fn new(base_path_str: String) -> Self {
     let base_path = Path::new(&base_path_str);
 
-    let config_path = base_path
-      .join("config.json")
-      .as_os_str()
-      .to_str()
-      .unwrap()
-      .to_string();
+    let config_path = base_path.join("config.json").as_os_str().to_str().unwrap().to_string();
     println!("Config Path: {}", config_path);
     let config = load_config_file(&config_path).await.unwrap();
 
@@ -84,27 +76,27 @@ impl FlashpointService {
     println!("Prefs Path: {}", prefs_path);
     let prefs = load_prefs_file(&prefs_path).await.unwrap();
 
-    let registers = WebsocketRegisters {
-      ping: WebsocketRegister {
-        cls: Box::new(|ping| ping),
-      },
-    };
+    #[cfg(feature = "services")]
+    let services_info = load_services(&base_path_str, &prefs).await.unwrap();
 
     Self {
+      initialized: false,
       base_path: base_path_str.clone(),
       config,
       prefs: prefs.clone(),
       #[cfg(feature = "services")]
-      services_info: load_services(&base_path_str, &prefs).await.unwrap(),
+      services_info,
       signals: FlashpointSignals {
         exit_code: ExitSignal::new(),
         init_load: InitLoadSignal::new(),
       },
-      registers,
     }
   }
 
-  pub async fn init(&mut self) {
+  pub fn init(&mut self) {
+    if self.initialized {
+      return;
+    }
     // TODO
     self.signals.init_load.emit(InitLoad::Services);
     // TODO
@@ -117,17 +109,32 @@ impl FlashpointService {
     self.signals.init_load.emit(InitLoad::ExecMappings);
     // TODO
     self.signals.init_load.emit(InitLoad::Curate);
+    self.initialized = true;
+  }
+
+  #[cfg(feature = "websocket")]
+  pub fn ping(&self, data: String) -> String {
+    data
   }
 
   #[cfg(feature = "websocket")]
   pub async fn listen(self) {
+    use std::process::exit;
+
+    let registers = Arc::new(Mutex::new(WebsocketRegisters {
+      init_data: Box::new(|fp_service, _: ()| InitDataRes {
+        config: fp_service.config.clone(),
+        prefs: fp_service.prefs.clone(),
+        #[cfg(feature = "services")]
+        services_info: fp_service.services_info.clone(),
+      }),
+    }));
+
     // Create listener state
     let fp_state = Arc::new(Mutex::new(self));
     let state = PeerMap::new(Mutex::new(HashMap::new()));
     let addr = "127.0.0.1:9001";
-    let listener = TcpListener::bind(addr)
-      .await
-      .expect("Failed to bind websocket listener");
+    let listener = TcpListener::bind(addr).await.expect("Failed to bind websocket listener");
 
     println!("Listening on: {}", addr);
 
@@ -135,14 +142,22 @@ impl FlashpointService {
     let ctrlc_fp_state = fp_state.clone();
     ctrlc::set_handler(move || {
       println!("Received Exit Signal, shutting down...");
-      ctrlc_fp_state.lock().unwrap().signals.exit_code.emit(0);
+      match ctrlc_fp_state.lock() {
+        Ok(fp) => {
+          fp.signals.exit_code.emit(0);
+        }
+        Err(e) => {
+          println!("Error exiting FlashpointService: {}", e);
+          exit(1);
+        }
+      }
     })
     .expect("Error setting Ctrl-C handler");
 
     // Each connection spawns own tokio task
     while let Ok((stream, addr)) = listener.accept().await {
       let fp_lock = fp_state.clone();
-      tokio::spawn(handle_connection(fp_lock, state.clone(), stream, addr));
+      tokio::spawn(handle_connection(fp_lock, state.clone(), stream, addr, registers.clone()));
     }
   }
 
@@ -152,10 +167,7 @@ impl FlashpointService {
 }
 
 #[cfg(feature = "services")]
-async fn load_services(
-  base_path: &str,
-  prefs: &Preferences,
-) -> Result<Services, Box<dyn std::error::Error>> {
+async fn load_services(base_path: &str, prefs: &Preferences) -> Result<Services, Box<dyn std::error::Error>> {
   let p = Path::new(&base_path);
   let services_path = p
     .parent()
@@ -198,12 +210,14 @@ async fn load_prefs_file(path: &str) -> Result<Preferences, Box<dyn std::error::
 
 #[cfg(feature = "websocket")]
 async fn handle_connection(
-  fp_mutex_guard: Arc<Mutex<FlashpointService>>,
+  fp_service: Arc<Mutex<FlashpointService>>,
   peer_map: PeerMap,
   raw_stream: TcpStream,
   addr: SocketAddr,
+  registers: Arc<Mutex<WebsocketRegisters>>,
 ) {
   use futures_util::{future, pin_mut, TryStreamExt};
+  use serde_json::Value;
 
   println!("Incoming TCP connection from: {}", addr);
 
@@ -221,11 +235,49 @@ async fn handle_connection(
 
   let broadcast_incoming = incoming.try_for_each(|msg| {
     println!("{}: {:?}", &addr, msg.to_text().unwrap());
-    let fp_lock = fp_mutex_guard.clone();
+    // Create copies of the state locks to use inside async function
+    let fp_service = fp_service.clone();
+    let registers = registers.clone();
+    let peer_map = peer_map.clone();
     async move {
-      // Take control of fp state
-      let fp = fp_lock.lock().unwrap();
-      println!("JSON Folder Path: {}", fp.prefs.json_folder_path);
+      // Take control of registers and fp states
+      let registers = registers.lock().unwrap();
+      let mut fp_service = fp_service.lock().unwrap();
+      let peers = peer_map.lock().unwrap();
+
+      // Deserialize incoming message
+      let r: Result<Value, serde_json::Error> = serde_json::from_str(msg.to_text().unwrap());
+      match r {
+        Ok(rec_msg) => {
+          let op = rec_msg["op"].as_str().unwrap();
+          let data = rec_msg["data"].clone();
+          let res_str: String;
+          match op {
+            "init" => {
+              println!("Init Data");
+              ws_execute!(registers.init_data, res_str, fp_service);
+            }
+            _ => {
+              res_str = "{ \"error\": \"unknown operation\" }".to_string();
+            }
+          };
+          let res_msg = Message::text(res_str);
+
+          // Broadcast response only to ourselves
+          let broadcast_recipients = peers
+            .iter()
+            .filter(|(peer_addr, _)| peer_addr == &&addr)
+            .map(|(_, ws_sink)| ws_sink);
+
+          for recp in broadcast_recipients {
+            recp.unbounded_send(res_msg.clone()).unwrap();
+          }
+        }
+        Err(e) => {
+          println!("Error deserializing message: {}", e);
+        }
+      }
+
       Ok(())
     }
   });

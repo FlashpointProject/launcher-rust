@@ -5,9 +5,7 @@ use std::process::exit;
 async fn main() {
   println!("-- Flashpoint Service --");
 
-  let mut fp_service =
-    FlashpointService::new(r"C:\Users\colin\Downloads\Flashpoint 11 Infinity\Launcher".to_string())
-      .await;
+  let mut fp_service = FlashpointService::new(r"C:\Users\colin\Downloads\Flashpoint 11 Infinity\Launcher".to_string()).await;
   println!("Created Flashpoint Service");
 
   fp_service.signals.init_load.connect(|_, data| {
@@ -18,8 +16,6 @@ async fn main() {
     println!("Exit Code: {}", data);
     exit(data);
   });
-
-  fp_service.init().await;
 
   fp_service.listen().await;
 }
