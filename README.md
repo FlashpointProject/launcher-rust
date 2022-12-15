@@ -16,4 +16,4 @@
 **Release Binary** - `cargo build --release`
 - If targetting Windows 32bit machines:
 - Add toolchain (run once) `rustup target add i686-pc-windows-msvc`
-- Add target to build command `cargo build --release --target i686-windows-msvc`
+- Add target to build command `cargo build --release --target i686-pc-windows-msvc`
