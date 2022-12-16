@@ -1,10 +1,19 @@
 use crate::FlashpointService;
 use flashpoint_config::types::*;
-use flashpoint_database::models::{Game, ViewGame};
+use flashpoint_database::{
+  models::{Game, TagCategory, ViewGame},
+  tag::InsertableTagCategory,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::MutexGuard;
 
-pub type WebsocketRegister<RecType, ResType> = Box<dyn Fn(MutexGuard<FlashpointService>, RecType) -> ResType + Send>;
+pub type WebsocketRegister<RecType, ResType> = Box<
+  dyn Fn(
+      MutexGuard<FlashpointService>,
+      RecType,
+    ) -> Result<WebsocketRes<ResType>, Box<dyn std::error::Error>>
+    + Send,
+>;
 // pub type WebsocketRegisterAlone<RecType, ResType> = Box<dyn Fn(RecType) -> ResType + Send>;
 
 #[derive(Debug, Serialize)]
@@ -22,22 +31,8 @@ pub struct AddRecData {
 }
 
 #[derive(Debug, Serialize)]
-pub struct StringRes {
-  pub data: String,
-}
-#[derive(Debug, Serialize)]
-pub struct NumberRes {
-  pub data: i32,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ViewGameVecRes {
-  pub data: Vec<ViewGame>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GameVecRes {
-  pub data: Vec<Game>,
+pub struct WebsocketRes<T> {
+  pub data: T,
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,9 +43,11 @@ pub struct AddRecv {
 
 pub struct WebsocketRegisters {
   pub init_data: WebsocketRegister<(), InitDataRes>,
-  pub view_all_games: WebsocketRegister<(), ViewGameVecRes>,
-  pub all_games: WebsocketRegister<(), GameVecRes>,
-  pub add: WebsocketRegister<AddRecv, NumberRes>,
+  pub view_all_games: WebsocketRegister<(), Vec<ViewGame>>,
+  pub all_games: WebsocketRegister<(), Vec<Game>>,
+  pub all_tag_categories: WebsocketRegister<(), Vec<TagCategory>>,
+  pub create_tag_category: WebsocketRegister<InsertableTagCategory, TagCategory>,
+  pub add: WebsocketRegister<AddRecv, i32>,
 }
 
 // #[macro_export]
@@ -80,7 +77,12 @@ pub struct WebsocketRegisters {
 macro_rules! ws_execute {
   // String rec type
   ($func_data:expr, $register:expr, $res_str:expr, $fp_service:expr, String) => {
-    ws_execute!($func_data.as_str()?.to_string(), $register, $res_str, $fp_service);
+    ws_execute!(
+      $func_data.as_str()?.to_string(),
+      $register,
+      $res_str,
+      $fp_service
+    );
   };
   // JSON rec type
   ($func_data:expr, $register:expr, $res_str:expr, $fp_service:expr, $rectype:ident) => {
@@ -99,28 +101,28 @@ macro_rules! ws_execute {
       fp_service.init();
     }
     let res = ($register)(fp_service, $func_data);
-    $res_str = serde_json::to_string(&res)?; // TODO: Make safe
+    $res_str = serde_json::to_string(&res?)?; // TODO: Make safe
   };
 }
 
-#[macro_export]
-macro_rules! ws_execute_alone {
-  // String rec type
-  ($func_data:expr, $register:expr, $res_str:expr, String) => {
-    ws_execute_alone!($func_data.as_str()?.to_string(), $register, $res_str);
-  };
-  // JSON rec type
-  ($func_data:expr, $register:expr, $res_str:expr, $rectype:ident) => {
-    let data_str = serde_json::to_string($func_data)?;
-    let data: $rectype = serde_json::from_str(data_str.as_str())?: ws_execute_alone!(data, $register, $res_str);
-  };
-  // No Data
-  ($register:expr, $res_str:expr) => {
-    ws_execute_alone!((), $register, $res_str);
-  };
-  // Data already deserialized
-  ($func_data:expr, $register:expr, $res_str:expr) => {
-    let res = ($register)($func_data);
-    $res_str = serde_json::to_string(&res)?;
-  };
-}
+// #[macro_export]
+// macro_rules! ws_execute_alone {
+//   // String rec type
+//   ($func_data:expr, $register:expr, $res_str:expr, String) => {
+//     ws_execute_alone!($func_data.as_str()?.to_string(), $register, $res_str);
+//   };
+//   // JSON rec type
+//   ($func_data:expr, $register:expr, $res_str:expr, $rectype:ident) => {
+//     let data_str = serde_json::to_string($func_data)?;
+//     let data: $rectype = serde_json::from_str(data_str.as_str())?: ws_execute_alone!(data, $register, $res_str);
+//   };
+//   // No Data
+//   ($register:expr, $res_str:expr) => {
+//     ws_execute_alone!((), $register, $res_str);
+//   };
+//   // Data already deserialized
+//   ($func_data:expr, $register:expr, $res_str:expr) => {
+//     let res = ($register)($func_data);
+//     $res_str = serde_json::to_string(&res)?;
+//   };
+// }

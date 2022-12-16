@@ -1,5 +1,6 @@
 use cfg_if::cfg_if;
 use flashpoint_config::types::{Config, Preferences};
+use flashpoint_database::establish_connection;
 use std::path::Path;
 use tokio::fs::File;
 
@@ -64,7 +65,9 @@ impl FlashpointService {
     println!("Config Path: {:?}", config_path.canonicalize()?);
     let config = load_config_file(&config_path).await?;
 
-    let prefs_path = base_path.join(config.flashpoint_path.clone()).join("preferences.json");
+    let prefs_path = base_path
+      .join(config.flashpoint_path.clone())
+      .join("preferences.json");
     println!("Prefs Path: {:?}", prefs_path.canonicalize()?);
     let prefs = load_prefs_file(&prefs_path).await?;
 
@@ -128,21 +131,56 @@ impl FlashpointService {
   pub async fn listen(self) {
     use std::process::exit;
 
+    use flashpoint_database::with_db;
+
     let registers = Arc::new(Mutex::new(WebsocketRegisters {
-      init_data: Box::new(|fp_service, _: ()| InitDataRes {
-        config: fp_service.config.clone(),
-        prefs: fp_service.prefs.clone(),
-        #[cfg(feature = "services")]
-        services_info: fp_service.services_info.clone(),
+      init_data: Box::new(|fp_service, _: ()| {
+        Ok(WebsocketRes {
+          data: InitDataRes {
+            config: fp_service.config.clone(),
+            prefs: fp_service.prefs.clone(),
+            #[cfg(feature = "services")]
+            services_info: fp_service.services_info.clone(),
+          },
+        })
       }),
-      view_all_games: Box::new(|fp_service, _| ViewGameVecRes {
-        data: flashpoint_database::game::view_all_games(fp_service.db_path.clone().as_str()),
+      view_all_games: Box::new(|fp_service, _| {
+        Ok(WebsocketRes {
+          data: with_db!(
+            fp_service.db_path.as_str(),
+            flashpoint_database::game::view_all_games
+          ),
+        })
       }),
-      all_games: Box::new(|fp_service, _| GameVecRes {
-        data: flashpoint_database::game::find_all_games(fp_service.db_path.clone().as_str()),
+      all_games: Box::new(|fp_service, _| {
+        Ok(WebsocketRes {
+          data: with_db!(
+            fp_service.db_path.as_str(),
+            flashpoint_database::game::find_all_games
+          ),
+        })
       }),
-      add: Box::new(|_, data| NumberRes {
-        data: data.first + data.second,
+      all_tag_categories: Box::new(|fp_service, _| {
+        Ok(WebsocketRes {
+          data: with_db!(
+            fp_service.db_path.as_str(),
+            flashpoint_database::tag::find_tag_categories
+          ),
+        })
+      }),
+      create_tag_category: Box::new(|fp_service, data| {
+        Ok(WebsocketRes {
+          data: with_db!(
+            fp_service.db_path.as_str(),
+            flashpoint_database::tag::create_tag_category,
+            data
+          )?,
+        })
+      }),
+      add: Box::new(|_, data| {
+        Ok(WebsocketRes {
+          data: data.first + data.second,
+        })
       }),
     }));
 
@@ -150,7 +188,9 @@ impl FlashpointService {
     let fp_state = Arc::new(Mutex::new(self));
     let state = PeerMap::new(Mutex::new(HashMap::new()));
     let addr = "127.0.0.1:9001";
-    let listener = TcpListener::bind(addr).await.expect("Failed to bind websocket listener");
+    let listener = TcpListener::bind(addr)
+      .await
+      .expect("Failed to bind websocket listener");
 
     println!("Listening on: {}", addr);
 
@@ -173,7 +213,13 @@ impl FlashpointService {
     // Each connection spawns own tokio task
     while let Ok((stream, addr)) = listener.accept().await {
       let fp_lock = fp_state.clone();
-      tokio::spawn(handle_connection(fp_lock, state.clone(), stream, addr, registers.clone()));
+      tokio::spawn(handle_connection(
+        fp_lock,
+        state.clone(),
+        stream,
+        addr,
+        registers.clone(),
+      ));
     }
   }
 
@@ -184,7 +230,7 @@ impl FlashpointService {
 
 #[cfg(feature = "services")]
 async fn load_services(services_path: &Path) -> Result<Services, Box<dyn std::error::Error>> {
-  println!("Services Path: {:?}", services_path.canonicalize().unwrap());
+  println!("Services Path: {:?}", services_path.canonicalize()?);
   let services = load_services_file(&services_path).await.unwrap();
   Ok(services)
 }
@@ -259,7 +305,8 @@ async fn handle_connection(
 
           // Execute the registered function
           let res = execute_register(registers, fp_service, op, data);
-          let res_msg = Message::text(res.unwrap_or_else(|err| format!("{{ \"error\": \"{:?}\" }}", err)));
+          let res_msg =
+            Message::text(res.unwrap_or_else(|err| format!("{{ \"error\": \"{:?}\" }}", err)));
 
           // Broadcast response only to ourselves
           let broadcast_recipients = peers
@@ -307,6 +354,8 @@ fn execute_register(
   op: &str,
   data: serde_json::Value,
 ) -> Result<String, Box<dyn std::error::Error>> {
+  use flashpoint_database::tag::InsertableTagCategory;
+
   let res_str: String;
   match op {
     "init" => {
@@ -320,6 +369,20 @@ fn execute_register(
     "all_games" => {
       println!("All Games");
       ws_execute!(registers.all_games, res_str, fp_service);
+    }
+    "all_tag_categories" => {
+      println!("All Categories");
+      ws_execute!(registers.all_tag_categories, res_str, fp_service);
+    }
+    "create_tag_category" => {
+      println!("Create Tag Category");
+      ws_execute!(
+        &data,
+        registers.create_tag_category,
+        res_str,
+        fp_service,
+        InsertableTagCategory
+      );
     }
     "add" => {
       println!("Add");

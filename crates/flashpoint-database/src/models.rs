@@ -140,5 +140,5 @@ pub struct TagCategory {
   pub id: i32,
   pub name: String,
   pub color: String,
-  pub description: String,
+  pub description: Option<String>,
 }
