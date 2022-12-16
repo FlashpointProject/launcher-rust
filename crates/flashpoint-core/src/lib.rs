@@ -87,9 +87,8 @@ impl FlashpointService {
         .join("services.json"),
     )
     .await?;
-    let db_init_data = flashpoint_database::types::InitData { db_path: db_path };
     Ok(Self {
-      db: flashpoint_database::initialize(db_init_data)?,
+      db: flashpoint_database::initialize(&db_path)?,
       initialized: false,
       base_path: base_path.canonicalize()?.to_str().unwrap().to_string(),
       config,

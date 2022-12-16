@@ -5,7 +5,7 @@ pub mod models;
 pub mod schema;
 pub mod tag;
 pub mod types;
-use types::{DbErrors, DbState, InitData};
+use types::{DbErrors, DbState};
 
 fn establish_connection(db_path: &str) -> Result<SqliteConnection, DbErrors> {
   match SqliteConnection::establish(db_path) {
@@ -14,7 +14,7 @@ fn establish_connection(db_path: &str) -> Result<SqliteConnection, DbErrors> {
   }
 }
 
-pub fn initialize(data: InitData) -> Result<DbState, types::DbErrors> {
-  let conn = establish_connection(&data.db_path)?;
+pub fn initialize(db_path: &str) -> Result<DbState, types::DbErrors> {
+  let conn = establish_connection(db_path)?;
   Ok(DbState { conn })
 }
