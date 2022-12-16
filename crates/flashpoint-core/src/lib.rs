@@ -128,8 +128,11 @@ impl FlashpointService {
         #[cfg(feature = "services")]
         services_info: fp_service.services_info.clone(),
       }),
+      view_all_games: Box::new(|_| ViewGameVecRes {
+        data: flashpoint_database::view_all_games(r"C:\Users\colin\Downloads\Flashpoint 11 Infinity\Data\flashpoint.sqlite"),
+      }),
       all_games: Box::new(|_| GameVecRes {
-        data: flashpoint_database::get_all_games(r"C:\Users\colin\Downloads\Flashpoint 11 Infinity\Data\flashpoint.sqlite"),
+        data: flashpoint_database::all_games(r"C:\Users\colin\Downloads\Flashpoint 11 Infinity\Data\flashpoint.sqlite"),
       }),
       add: Box::new(|_, data| NumberRes {
         data: data.first + data.second,
@@ -312,6 +315,10 @@ fn execute_register(
     "init" => {
       println!("Init Data");
       ws_execute!(registers.init_data, res_str, fp_service);
+    }
+    "view_all_games" => {
+      println!("All Games");
+      ws_execute_alone!(registers.view_all_games, res_str);
     }
     "all_games" => {
       println!("All Games");

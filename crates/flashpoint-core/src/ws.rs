@@ -1,6 +1,6 @@
 use crate::FlashpointService;
 use flashpoint_config::types::*;
-use flashpoint_database::models::Game;
+use flashpoint_database::models::{Game, ViewGame};
 use serde::{Deserialize, Serialize};
 use std::sync::MutexGuard;
 
@@ -31,9 +31,15 @@ pub struct NumberRes {
 }
 
 #[derive(Debug, Serialize)]
+pub struct ViewGameVecRes {
+  pub data: Vec<ViewGame>,
+}
+
+#[derive(Debug, Serialize)]
 pub struct GameVecRes {
   pub data: Vec<Game>,
 }
+
 #[derive(Debug, Deserialize)]
 pub struct AddRecv {
   pub first: i32,
@@ -42,6 +48,7 @@ pub struct AddRecv {
 
 pub struct WebsocketRegisters {
   pub init_data: WebsocketRegister<(), InitDataRes>,
+  pub view_all_games: WebsocketRegisterAlone<(), ViewGameVecRes>,
   pub all_games: WebsocketRegisterAlone<(), GameVecRes>,
   pub add: WebsocketRegister<AddRecv, NumberRes>,
 }

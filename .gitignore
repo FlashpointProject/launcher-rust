@@ -1,3 +1,7 @@
 /target
 /crates/flashpoint-database/.env
 /crates/flashpoint-database/test.db
+/node_modules
+/bench.mjs
+/package.json
+/package-lock.json

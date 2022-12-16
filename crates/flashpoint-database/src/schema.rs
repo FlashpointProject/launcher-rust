@@ -13,13 +13,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    test_game (id) {
-        id -> Text,
-        time -> Timestamp,
-    }
-}
-
-diesel::table! {
     game (id) {
         id -> Text,
         parentGameId -> Nullable<Text>,
