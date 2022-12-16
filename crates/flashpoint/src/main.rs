@@ -6,7 +6,9 @@ async fn main() {
   println!("-- Flashpoint Service --");
 
   let base_path = Path::new(r"C:\Users\colin\Downloads\Flashpoint 11 Infinity\Launcher");
-  let mut fp_service = FlashpointService::new(base_path).await;
+  let mut fp_service = FlashpointService::new(base_path)
+    .await
+    .expect("Failed to create Flashpoint Service");
   println!("Created Flashpoint Service");
 
   fp_service.signals.init_load.connect(|_, data| {

@@ -59,14 +59,14 @@ pub struct FlashpointService {
 }
 
 impl FlashpointService {
-  pub async fn new(base_path: &Path) -> Self {
+  pub async fn new(base_path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
     let config_path = base_path.join("config.json");
-    println!("Config Path: {:?}", config_path);
-    let config = load_config_file(&config_path).await.unwrap();
+    println!("Config Path: {:?}", config_path.canonicalize()?);
+    let config = load_config_file(&config_path).await?;
 
     let prefs_path = base_path.join(config.flashpoint_path.clone()).join("preferences.json");
-    println!("Prefs Path: {:?}", prefs_path);
-    let prefs = load_prefs_file(&prefs_path).await.unwrap();
+    println!("Prefs Path: {:?}", prefs_path.canonicalize()?);
+    let prefs = load_prefs_file(&prefs_path).await?;
 
     let db_path = base_path
       .join(config.flashpoint_path.clone())
@@ -83,13 +83,12 @@ impl FlashpointService {
         .join(prefs.json_folder_path.clone())
         .join("services.json"),
     )
-    .await
-    .unwrap();
+    .await?;
 
-    Self {
+    Ok(Self {
       db_path,
       initialized: false,
-      base_path: base_path.canonicalize().unwrap().to_str().unwrap().to_string(),
+      base_path: base_path.canonicalize()?.to_str().unwrap().to_string(),
       config,
       prefs: prefs.clone(),
       #[cfg(feature = "services")]
@@ -98,7 +97,7 @@ impl FlashpointService {
         exit_code: ExitSignal::new(),
         init_load: InitLoadSignal::new(),
       },
-    }
+    })
   }
 
   pub fn init(&mut self) {
@@ -185,7 +184,7 @@ impl FlashpointService {
 
 #[cfg(feature = "services")]
 async fn load_services(services_path: &Path) -> Result<Services, Box<dyn std::error::Error>> {
-  println!("Services Path: {:?}", services_path);
+  println!("Services Path: {:?}", services_path.canonicalize().unwrap());
   let services = load_services_file(&services_path).await.unwrap();
   Ok(services)
 }
@@ -195,7 +194,7 @@ async fn load_services_file(path: &Path) -> Result<Services, Box<dyn std::error:
   let mut file = File::open(path).await?;
   let mut contents = vec![];
   file.read_to_end(&mut contents).await?;
-  let services: Services = serde_json::from_str(std::str::from_utf8(&contents).unwrap())?;
+  let services: Services = serde_json::from_str(std::str::from_utf8(&contents)?)?;
   Ok(services)
 }
 
@@ -203,7 +202,7 @@ async fn load_config_file(path: &Path) -> Result<Config, Box<dyn std::error::Err
   let mut file = File::open(path).await?;
   let mut contents = vec![];
   file.read_to_end(&mut contents).await?;
-  let config: Config = serde_json::from_str(std::str::from_utf8(&contents).unwrap())?;
+  let config: Config = serde_json::from_str(std::str::from_utf8(&contents)?)?;
   Ok(config)
 }
 
@@ -211,7 +210,7 @@ async fn load_prefs_file(path: &Path) -> Result<Preferences, Box<dyn std::error:
   let mut file = File::open(path).await?;
   let mut contents = vec![];
   file.read_to_end(&mut contents).await?;
-  let prefs: Preferences = serde_json::from_str(std::str::from_utf8(&contents).unwrap())?;
+  let prefs: Preferences = serde_json::from_str(std::str::from_utf8(&contents)?)?;
   Ok(prefs)
 }
 
