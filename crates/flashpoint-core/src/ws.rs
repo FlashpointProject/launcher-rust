@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::MutexGuard;
 
 pub type WebsocketRegister<RecType, ResType> = Box<dyn Fn(MutexGuard<FlashpointService>, RecType) -> ResType + Send>;
-pub type WebsocketRegisterAlone<RecType, ResType> = Box<dyn Fn(RecType) -> ResType + Send>;
+// pub type WebsocketRegisterAlone<RecType, ResType> = Box<dyn Fn(RecType) -> ResType + Send>;
 
 #[derive(Debug, Serialize)]
 pub struct InitDataRes {
@@ -48,8 +48,8 @@ pub struct AddRecv {
 
 pub struct WebsocketRegisters {
   pub init_data: WebsocketRegister<(), InitDataRes>,
-  pub view_all_games: WebsocketRegisterAlone<(), ViewGameVecRes>,
-  pub all_games: WebsocketRegisterAlone<(), GameVecRes>,
+  pub view_all_games: WebsocketRegister<(), ViewGameVecRes>,
+  pub all_games: WebsocketRegister<(), GameVecRes>,
   pub add: WebsocketRegister<AddRecv, NumberRes>,
 }
 

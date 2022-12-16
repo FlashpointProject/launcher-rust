@@ -1,11 +1,12 @@
 use flashpoint_core::{signals::Signal, FlashpointService};
-use std::process::exit;
+use std::{path::Path, process::exit};
 
 #[tokio::main]
 async fn main() {
   println!("-- Flashpoint Service --");
 
-  let mut fp_service = FlashpointService::new(r"C:\Users\colin\Downloads\Flashpoint 11 Infinity\Launcher".to_string()).await;
+  let base_path = Path::new(r"C:\Users\colin\Downloads\Flashpoint 11 Infinity\Launcher");
+  let mut fp_service = FlashpointService::new(base_path).await;
   println!("Created Flashpoint Service");
 
   fp_service.signals.init_load.connect(|_, data| {

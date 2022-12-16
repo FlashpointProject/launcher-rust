@@ -48,6 +48,7 @@ pub struct FlashpointSignals {
 }
 
 pub struct FlashpointService {
+  pub db_path: String,
   pub initialized: bool,
   pub base_path: String,
   pub config: Config,
@@ -58,30 +59,37 @@ pub struct FlashpointService {
 }
 
 impl FlashpointService {
-  pub async fn new(base_path_str: String) -> Self {
-    let base_path = Path::new(&base_path_str);
-
-    let config_path = base_path.join("config.json").as_os_str().to_str().unwrap().to_string();
-    println!("Config Path: {}", config_path);
+  pub async fn new(base_path: &Path) -> Self {
+    let config_path = base_path.join("config.json");
+    println!("Config Path: {:?}", config_path);
     let config = load_config_file(&config_path).await.unwrap();
 
-    let prefs_path = base_path
-      .parent()
-      .unwrap()
-      .join("preferences.json")
-      .as_os_str()
+    let prefs_path = base_path.join(config.flashpoint_path.clone()).join("preferences.json");
+    println!("Prefs Path: {:?}", prefs_path);
+    let prefs = load_prefs_file(&prefs_path).await.unwrap();
+
+    let db_path = base_path
+      .join(config.flashpoint_path.clone())
+      .join(prefs.json_folder_path.clone())
+      .join("flashpoint.sqlite")
       .to_str()
       .unwrap()
       .to_string();
-    println!("Prefs Path: {}", prefs_path);
-    let prefs = load_prefs_file(&prefs_path).await.unwrap();
 
     #[cfg(feature = "services")]
-    let services_info = load_services(&base_path_str, &prefs).await.unwrap();
+    let services_info = load_services(
+      &base_path
+        .join(config.flashpoint_path.clone())
+        .join(prefs.json_folder_path.clone())
+        .join("services.json"),
+    )
+    .await
+    .unwrap();
 
     Self {
+      db_path,
       initialized: false,
-      base_path: base_path_str.clone(),
+      base_path: base_path.canonicalize().unwrap().to_str().unwrap().to_string(),
       config,
       prefs: prefs.clone(),
       #[cfg(feature = "services")]
@@ -128,11 +136,11 @@ impl FlashpointService {
         #[cfg(feature = "services")]
         services_info: fp_service.services_info.clone(),
       }),
-      view_all_games: Box::new(|_| ViewGameVecRes {
-        data: flashpoint_database::view_all_games(r"C:\Users\colin\Downloads\Flashpoint 11 Infinity\Data\flashpoint.sqlite"),
+      view_all_games: Box::new(|fp_service, _| ViewGameVecRes {
+        data: flashpoint_database::view_all_games(fp_service.db_path.clone().as_str()),
       }),
-      all_games: Box::new(|_| GameVecRes {
-        data: flashpoint_database::all_games(r"C:\Users\colin\Downloads\Flashpoint 11 Infinity\Data\flashpoint.sqlite"),
+      all_games: Box::new(|fp_service, _| GameVecRes {
+        data: flashpoint_database::all_games(fp_service.db_path.clone().as_str()),
       }),
       add: Box::new(|_, data| NumberRes {
         data: data.first + data.second,
@@ -176,24 +184,14 @@ impl FlashpointService {
 }
 
 #[cfg(feature = "services")]
-async fn load_services(base_path: &str, prefs: &Preferences) -> Result<Services, Box<dyn std::error::Error>> {
-  let p = Path::new(&base_path);
-  let services_path = p
-    .parent()
-    .unwrap()
-    .join(prefs.json_folder_path.clone())
-    .join("services.json")
-    .as_os_str()
-    .to_str()
-    .unwrap()
-    .to_string();
-  println!("Services Path: {}", services_path);
+async fn load_services(services_path: &Path) -> Result<Services, Box<dyn std::error::Error>> {
+  println!("Services Path: {:?}", services_path);
   let services = load_services_file(&services_path).await.unwrap();
   Ok(services)
 }
 
 #[cfg(feature = "services")]
-async fn load_services_file(path: &str) -> Result<Services, Box<dyn std::error::Error>> {
+async fn load_services_file(path: &Path) -> Result<Services, Box<dyn std::error::Error>> {
   let mut file = File::open(path).await?;
   let mut contents = vec![];
   file.read_to_end(&mut contents).await?;
@@ -201,7 +199,7 @@ async fn load_services_file(path: &str) -> Result<Services, Box<dyn std::error::
   Ok(services)
 }
 
-async fn load_config_file(path: &str) -> Result<Config, Box<dyn std::error::Error>> {
+async fn load_config_file(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
   let mut file = File::open(path).await?;
   let mut contents = vec![];
   file.read_to_end(&mut contents).await?;
@@ -209,7 +207,7 @@ async fn load_config_file(path: &str) -> Result<Config, Box<dyn std::error::Erro
   Ok(config)
 }
 
-async fn load_prefs_file(path: &str) -> Result<Preferences, Box<dyn std::error::Error>> {
+async fn load_prefs_file(path: &Path) -> Result<Preferences, Box<dyn std::error::Error>> {
   let mut file = File::open(path).await?;
   let mut contents = vec![];
   file.read_to_end(&mut contents).await?;
@@ -318,11 +316,11 @@ fn execute_register(
     }
     "view_all_games" => {
       println!("All Games");
-      ws_execute_alone!(registers.view_all_games, res_str);
+      ws_execute!(registers.view_all_games, res_str, fp_service);
     }
     "all_games" => {
       println!("All Games");
-      ws_execute_alone!(registers.all_games, res_str);
+      ws_execute!(registers.all_games, res_str, fp_service);
     }
     "add" => {
       println!("Add");
