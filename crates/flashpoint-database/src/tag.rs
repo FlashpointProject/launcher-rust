@@ -11,15 +11,15 @@ pub struct InsertableTagCategory {
   pub description: Option<String>,
 }
 
-// find_tag_categories
+// find_tags
+
+// create_tag
 
 // delete_tag
 
 // save_tag
 
 // save_tag_alias
-
-// find_tags
 
 // merge_tags
 
@@ -33,12 +33,6 @@ pub fn find_tag_categories(conn: &mut SqliteConnection) -> Vec<TagCategory> {
     .load::<TagCategory>(conn)
     .expect("Error loading tag categories")
 }
-
-// find_game_tags
-
-// create_tag
-
-// create_tag_category
 
 pub fn create_tag_category(
   conn: &mut SqliteConnection,
@@ -72,11 +66,23 @@ pub fn get_tag_category(
     .first(conn)
 }
 
-// save_tag_category
+pub fn get_tag_category_by_name(
+  conn: &mut SqliteConnection,
+  name: String,
+) -> Result<TagCategory, diesel::result::Error> {
+  tag_category::table
+    .filter(tag_category::name.eq(name))
+    .first(conn)
+}
 
-// get_tag_category
+pub fn delete_tag_category(
+  conn: &mut SqliteConnection,
+  category_id: i32,
+) -> Result<usize, diesel::result::Error> {
+  diesel::delete(tag_category::table.filter(tag_category::id.eq(category_id))).execute(conn)
+}
 
-// delete_tag_category
+// find_game_tags
 
 // get_tag_by_id
 

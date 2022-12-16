@@ -1,6 +1,6 @@
 use cfg_if::cfg_if;
 use flashpoint_config::types::{Config, Preferences};
-use flashpoint_database::establish_connection;
+use flashpoint_database::{establish_connection, SqliteConnection};
 use std::path::Path;
 use tokio::fs::File;
 
@@ -49,7 +49,7 @@ pub struct FlashpointSignals {
 }
 
 pub struct FlashpointService {
-  pub db_path: String,
+  pub db: SqliteConnection,
   pub initialized: bool,
   pub base_path: String,
   pub config: Config,
@@ -89,7 +89,7 @@ impl FlashpointService {
     .await?;
 
     Ok(Self {
-      db_path,
+      db: establish_connection(&db_path)?,
       initialized: false,
       base_path: base_path.canonicalize()?.to_str().unwrap().to_string(),
       config,
@@ -131,8 +131,6 @@ impl FlashpointService {
   pub async fn listen(self) {
     use std::process::exit;
 
-    use flashpoint_database::with_db;
-
     let registers = Arc::new(Mutex::new(WebsocketRegisters {
       init_data: Box::new(|fp_service, _: ()| {
         Ok(WebsocketRes {
@@ -144,37 +142,24 @@ impl FlashpointService {
           },
         })
       }),
-      view_all_games: Box::new(|fp_service, _| {
+      view_all_games: Box::new(|mut fp_service, _| {
         Ok(WebsocketRes {
-          data: with_db!(
-            fp_service.db_path.as_str(),
-            flashpoint_database::game::view_all_games
-          ),
+          data: flashpoint_database::game::view_all_games(&mut fp_service.db),
         })
       }),
-      all_games: Box::new(|fp_service, _| {
+      all_games: Box::new(|mut fp_service, _| {
         Ok(WebsocketRes {
-          data: with_db!(
-            fp_service.db_path.as_str(),
-            flashpoint_database::game::find_all_games
-          ),
+          data: flashpoint_database::game::find_all_games(&mut fp_service.db),
         })
       }),
-      all_tag_categories: Box::new(|fp_service, _| {
+      all_tag_categories: Box::new(|mut fp_service, _| {
         Ok(WebsocketRes {
-          data: with_db!(
-            fp_service.db_path.as_str(),
-            flashpoint_database::tag::find_tag_categories
-          ),
+          data: flashpoint_database::tag::find_tag_categories(&mut fp_service.db),
         })
       }),
-      create_tag_category: Box::new(|fp_service, data| {
+      create_tag_category: Box::new(|mut fp_service, data| {
         Ok(WebsocketRes {
-          data: with_db!(
-            fp_service.db_path.as_str(),
-            flashpoint_database::tag::create_tag_category,
-            data
-          )?,
+          data: flashpoint_database::tag::create_tag_category(&mut fp_service.db, data)?,
         })
       }),
       add: Box::new(|_, data| {

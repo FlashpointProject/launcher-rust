@@ -15,7 +15,13 @@ pub fn find_all_games(conn: &mut SqliteConnection) -> Vec<Game> {
   game.load::<Game>(conn).expect("Error loading posts")
 }
 
-// find_game
+pub fn find_game(
+  conn: &mut SqliteConnection,
+  game_id: String,
+) -> Result<Game, diesel::result::Error> {
+  use crate::schema::game::dsl::*;
+  game.find(game_id).first(conn)
+}
 
 // find_game_row (?)
 
