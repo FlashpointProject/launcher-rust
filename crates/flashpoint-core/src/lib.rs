@@ -1,6 +1,6 @@
 use cfg_if::cfg_if;
 use flashpoint_config::types::{Config, Preferences};
-use flashpoint_database::{establish_connection, SqliteConnection};
+use flashpoint_database::types::DbState;
 use std::path::Path;
 use tokio::fs::File;
 
@@ -49,7 +49,7 @@ pub struct FlashpointSignals {
 }
 
 pub struct FlashpointService {
-  pub db: SqliteConnection,
+  pub db: DbState,
   pub initialized: bool,
   pub base_path: String,
   pub config: Config,
@@ -87,9 +87,8 @@ impl FlashpointService {
         .join("services.json"),
     )
     .await?;
-
     Ok(Self {
-      db: establish_connection(&db_path)?,
+      db: flashpoint_database::initialize(&db_path)?,
       initialized: false,
       base_path: base_path.canonicalize()?.to_str().unwrap().to_string(),
       config,
