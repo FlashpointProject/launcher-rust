@@ -136,10 +136,10 @@ impl FlashpointService {
         services_info: fp_service.services_info.clone(),
       }),
       view_all_games: Box::new(|fp_service, _| ViewGameVecRes {
-        data: flashpoint_database::view_all_games(fp_service.db_path.clone().as_str()),
+        data: flashpoint_database::game::view_all_games(fp_service.db_path.clone().as_str()),
       }),
       all_games: Box::new(|fp_service, _| GameVecRes {
-        data: flashpoint_database::all_games(fp_service.db_path.clone().as_str()),
+        data: flashpoint_database::game::find_all_games(fp_service.db_path.clone().as_str()),
       }),
       add: Box::new(|_, data| NumberRes {
         data: data.first + data.second,
