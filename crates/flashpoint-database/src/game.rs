@@ -1,26 +1,24 @@
 use diesel::prelude::*;
 
 use crate::models::{Game, ViewGame};
+use crate::schema::game::dsl::*;
+use crate::types::DbState;
 
-pub fn view_all_games(conn: &mut SqliteConnection) -> Vec<ViewGame> {
-  use crate::schema::game::dsl::*;
+pub fn view_all_games(state: &mut DbState) -> Vec<ViewGame> {
   game
     .select((id, title, developer, publisher, series, platform, tagsStr))
-    .load::<ViewGame>(conn)
+    .load::<ViewGame>(&mut state.conn)
     .expect("Error loading posts")
 }
 
-pub fn find_all_games(conn: &mut SqliteConnection) -> Vec<Game> {
-  use crate::schema::game::dsl::*;
-  game.load::<Game>(conn).expect("Error loading posts")
+pub fn find_all_games(state: &mut DbState) -> Vec<Game> {
+  game
+    .load::<Game>(&mut state.conn)
+    .expect("Error loading posts")
 }
 
-pub fn find_game(
-  conn: &mut SqliteConnection,
-  game_id: String,
-) -> Result<Game, diesel::result::Error> {
-  use crate::schema::game::dsl::*;
-  game.find(game_id).first(conn)
+pub fn find_game(state: &mut DbState, game_id: String) -> Result<Game, diesel::result::Error> {
+  game.find(game_id).first(&mut state.conn)
 }
 
 // find_game_row (?)
