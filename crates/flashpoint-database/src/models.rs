@@ -1,5 +1,6 @@
+use crate::schema::game;
 use chrono::NaiveDateTime;
-use diesel::Queryable;
+use diesel::{Insertable, Queryable};
 use serde::Serialize;
 
 #[derive(Serialize, Queryable, Debug)]
@@ -14,35 +15,49 @@ pub struct ViewGame {
   pub tags_str: String,
 }
 
-#[derive(Serialize, Queryable, Debug)]
+#[derive(Serialize, Insertable, Queryable, Debug)]
 #[serde(rename_all = "camelCase")]
+#[diesel(table_name = game)]
 pub struct Game {
   pub id: String,
+  #[diesel(column_name = parentGameId)]
   pub parent_game_id: Option<String>,
   pub title: String,
+  #[diesel(column_name = alternateTitles)]
   pub alternate_titles: String,
   pub series: String,
   pub developer: String,
   pub publisher: String,
+  #[diesel(column_name = dateAdded)]
   pub date_added: NaiveDateTime,
+  #[diesel(column_name = dateModified)]
   pub date_modified: NaiveDateTime,
   pub platform: String,
   pub broken: bool,
   pub extreme: bool,
+  #[diesel(column_name = playMode)]
   pub play_mode: String,
   pub status: String,
   pub notes: String,
   pub source: String,
+  #[diesel(column_name = applicationPath)]
   pub application_path: String,
+  #[diesel(column_name = launchCommand)]
   pub launch_command: String,
+  #[diesel(column_name = releaseDate)]
   pub release_date: String,
   pub version: String,
+  #[diesel(column_name = originalDescription)]
   pub original_description: String,
   pub language: String,
   pub library: String,
+  #[diesel(column_name = orderTitle)]
   pub order_title: String,
+  #[diesel(column_name = activeDataId)]
   pub active_data_id: Option<i32>,
+  #[diesel(column_name = activeDataOnDisk)]
   pub active_data_on_disk: bool,
+  #[diesel(column_name = tagsStr)]
   pub tags_str: String,
 }
 

@@ -59,6 +59,7 @@ pub struct WebsocketRegisters {
   pub all_tag_categories: WebsocketRegister<(), Vec<TagCategory>>,
   pub create_tag_category: WebsocketRegister<InsertableTagCategory, TagCategory>,
   pub find_tag_by_name: WebsocketRegister<String, TagRes>,
+  pub find_games_with_tag: WebsocketRegister<String, Vec<Game>>,
   pub add: WebsocketRegister<AddRecv, i32>,
 }
 

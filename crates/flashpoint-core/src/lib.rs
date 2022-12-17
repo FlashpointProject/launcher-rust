@@ -178,6 +178,11 @@ impl FlashpointService {
           },
         })
       }),
+      find_games_with_tag: Box::new(|mut fp_service, data| {
+        Ok(WebsocketRes {
+          data: flashpoint_database::game::find_games_with_tag(&mut fp_service.db, data),
+        })
+      }),
       add: Box::new(|_, data| {
         Ok(WebsocketRes {
           data: data.first + data.second,
@@ -390,6 +395,16 @@ fn execute_register(
       ws_execute!(
         &data,
         registers.find_tag_by_name,
+        res_str,
+        fp_service,
+        String
+      );
+    }
+    "find_games_with_tag" => {
+      println!("Find Games With Tag");
+      ws_execute!(
+        &data,
+        registers.find_games_with_tag,
         res_str,
         fp_service,
         String
