@@ -1,5 +1,5 @@
-use crate::models::TagCategory;
-use crate::schema::tag_category;
+use crate::models::{Tag, TagAlias, TagCategory};
+use crate::schema::{tag, tag_alias, tag_category};
 use crate::types::DbState;
 use diesel::prelude::*;
 use serde::Deserialize;
@@ -89,6 +89,26 @@ pub fn delete_tag_category(
 // get_tag_by_id
 
 // get_tag_by_name
+
+pub fn find_tag_by_name(
+  state: &mut DbState,
+  name: String,
+) -> Result<(Tag, Vec<TagAlias>), diesel::result::Error> {
+  // Load tag
+  let alias = tag_alias::table
+    .filter(tag_alias::name.eq(name))
+    .first::<TagAlias>(&mut state.conn)?;
+  let tag_obj = tag::table
+    .filter(tag::id.eq(alias.tag_id.unwrap()))
+    .first::<Tag>(&mut state.conn)?;
+
+  // Load aliases
+  let aliases = tag_alias::table
+    .filter(tag_alias::tagId.eq(tag_obj.id))
+    .load::<TagAlias>(&mut state.conn)?;
+
+  Ok((tag_obj, aliases))
+}
 
 // add_alias_to_tag
 

@@ -280,6 +280,7 @@ name = "flashpoint-core"
 version = "0.1.0"
 dependencies = [
  "cfg-if",
+ "chrono",
  "ctrlc",
  "dyn-clone",
  "flashpoint-config",

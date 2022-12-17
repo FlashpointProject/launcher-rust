@@ -126,7 +126,7 @@ pub struct Tag {
   pub description: Option<String>,
 }
 
-#[derive(Serialize, Queryable, Debug)]
+#[derive(Clone, Serialize, Queryable, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct TagAlias {
   pub id: i32,

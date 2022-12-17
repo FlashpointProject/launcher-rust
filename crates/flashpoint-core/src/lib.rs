@@ -161,6 +161,23 @@ impl FlashpointService {
           data: flashpoint_database::tag::create_tag_category(&mut fp_service.db, data)?,
         })
       }),
+      find_tag_by_name: Box::new(|mut fp_service, data| {
+        let (tag, aliases) = flashpoint_database::tag::find_tag_by_name(&mut fp_service.db, data)?;
+        let primary = aliases
+          .iter()
+          .find(|a| a.id == tag.primary_alias_id.unwrap())
+          .unwrap();
+        Ok(WebsocketRes {
+          data: TagRes {
+            id: tag.id,
+            date_modified: tag.date_modified,
+            category_id: tag.category_id,
+            description: tag.description,
+            primary_alias: primary.clone(),
+            aliases,
+          },
+        })
+      }),
       add: Box::new(|_, data| {
         Ok(WebsocketRes {
           data: data.first + data.second,
@@ -366,6 +383,16 @@ fn execute_register(
         res_str,
         fp_service,
         InsertableTagCategory
+      );
+    }
+    "find_tag_by_name" => {
+      println!("Find Tag By Name");
+      ws_execute!(
+        &data,
+        registers.find_tag_by_name,
+        res_str,
+        fp_service,
+        String
       );
     }
     "add" => {
