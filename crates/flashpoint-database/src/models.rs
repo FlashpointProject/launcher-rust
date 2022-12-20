@@ -1,6 +1,6 @@
 use crate::schema::game;
 use chrono::NaiveDateTime;
-use diesel::{Insertable, Queryable};
+use diesel::{sqlite::Sqlite, ExpressionMethods, Insertable, Queryable};
 use serde::Serialize;
 
 #[derive(Serialize, Queryable, Debug)]

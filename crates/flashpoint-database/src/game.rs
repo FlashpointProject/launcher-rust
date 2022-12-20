@@ -1,10 +1,13 @@
+use chrono::NaiveDateTime;
+use diesel::helper_types::IntoBoxed;
 use diesel::prelude::*;
+use diesel::sqlite::Sqlite;
 
 use crate::models::{Game, TagAlias, ViewGame};
 use crate::schema::game;
 use crate::schema::game_tags_tag;
 use crate::schema::tag_alias;
-use crate::types::DbState;
+use crate::types::{DbState, FilterOpts};
 
 pub fn view_all_games(state: &mut DbState) -> Vec<ViewGame> {
   game::table
@@ -36,6 +39,9 @@ pub fn find_game(state: &mut DbState, game_id: String) -> Result<Game, diesel::r
 // find_random_games
 
 // find_game_page_keyset
+pub fn find_game_page_keyset(state: &mut DbState, search: FilterOpts) {
+  todo!()
+}
 
 // find_add_app
 
@@ -78,4 +84,185 @@ pub fn find_games_with_tag(state: &mut DbState, tag_str: String) -> Vec<Game> {
 
 // apply_tag_filters
 
-// get_game_query
+/// if pageSize is Some, order_by_ascending will be treated as the key.
+fn get_game_query<'a>(
+  filters: &FilterOpts,
+  order_by_ascending: Option<(&GameFilter, bool)>,
+  offset: Option<i64>,
+  page_size: Option<i64>,
+) -> diesel::helper_types::IntoBoxed<'a, game::table, Sqlite> {
+  let mut query = game::table.into_boxed();
+  if let Some(playlist_id) = &filters.playlist_id {
+    todo!()
+  }
+  if let Some(search) = &filters.search_query {
+    // Whitelist tends to be more restrictive, do it first.
+    for filter in &search.whitelist {
+      query = filter.filter_column(query, true);
+    }
+    for filter in &search.blacklist {
+      query = filter.filter_column(query, false);
+    }
+    for filter in &search.generic_whitelist {
+      query = apply_generic_filter(query, filter, true);
+    }
+    for filter in &search.generic_blacklist {
+      query = apply_generic_filter(query, filter, false);
+    }
+  }
+  if let Some((order_by, ascending)) = order_by_ascending {
+    if let Some(page_size) = page_size {
+      query = order_by.page(query, ascending, page_size)
+    } else {
+      query = order_by.order_query(query, ascending);
+    }
+  }
+  if let Some(offset) = offset {
+    query = query.offset(offset);
+  }
+  query
+}
+
+// TODO: proc macro on game?
+/// A single filter on a field of game. Also used as a key for keyset pagination, and a column identifier for OrderBy stuff.
+#[allow(non_camel_case_types)]
+pub enum GameFilter {
+  id(String),
+  parent_game_id(String),
+  title(String),
+  alternate_titles(String),
+  series(String),
+  developer(String),
+  publisher(String),
+  date_added(NaiveDateTime),
+  date_modified(NaiveDateTime),
+  platform(String),
+  broken(bool),
+  extreme(bool),
+  play_mode(String),
+  status(String),
+  notes(String),
+  source(String),
+  application_path(String),
+  launch_command(String),
+  release_date(String),
+  version(String),
+  original_description(String),
+  language(String),
+  library(String),
+  order_title(String),
+  active_data_id(i32),
+  active_data_on_disk(bool),
+  tags_str(String),
+}
+
+impl GameFilter {
+  fn filter_column<'a, 'b>(
+    &self,
+    q: IntoBoxed<'a, game::table, Sqlite>,
+    whitelist: bool,
+  ) -> IntoBoxed<'b, game::table, Sqlite>
+  where
+    'a: 'b,
+  {
+    use diesel::query_dsl::methods::FilterDsl;
+
+    if whitelist {
+      match self {
+        GameFilter::id(s) => FilterDsl::filter(q, game::id.like("%".to_owned() + s + "%")),
+        GameFilter::parent_game_id(s) => {
+          FilterDsl::filter(q, game::parentGameId.like("%".to_owned() + s + "%"))
+        }
+        // TODO: more
+        _ => q,
+      }
+    } else {
+      match self {
+        GameFilter::id(s) => FilterDsl::filter(q, game::id.not_like("%".to_owned() + s + "%")),
+        GameFilter::parent_game_id(s) => {
+          FilterDsl::filter(q, game::parentGameId.not_like("%".to_owned() + s + "%"))
+        }
+        // TODO: more
+        _ => q,
+      }
+    }
+  }
+  fn order_query<'a, 'b>(
+    &self,
+    q: IntoBoxed<'a, game::table, Sqlite>,
+    asc: bool,
+  ) -> IntoBoxed<'b, game::table, Sqlite>
+  where
+    'a: 'b,
+  {
+    if asc {
+      match self {
+        GameFilter::id(_) => q.order(game::id.asc()),
+        // TODO: more
+        _ => q.order(game::title.asc()),
+      }
+    } else {
+      match self {
+        GameFilter::id(_) => q.order(game::id.desc()),
+        // TODO: more
+        _ => q.order(game::title.desc()),
+      }
+    }
+  }
+  fn page<'a, 'b>(
+    &self,
+    q: IntoBoxed<'a, game::table, Sqlite>,
+    asc: bool,
+    page_size: i64,
+  ) -> IntoBoxed<'b, game::table, Sqlite>
+  where
+    'a: 'b,
+  {
+    let k = if asc {
+      match self {
+        GameFilter::title(s) => q
+          .filter(game::title.ge(s.clone()))
+          .order((game::title.asc(), game::id.asc())),
+        // TODO: more
+        _ => q,
+      }
+    } else {
+      match self {
+        GameFilter::title(s) => q
+          .filter(game::title.le(s.clone()))
+          .order((game::title.desc(), game::id.desc())),
+        // TODO: more
+        _ => q,
+      }
+    };
+    k.offset(1).limit(page_size)
+  }
+}
+
+fn apply_generic_filter<'a, 'b>(
+  q: IntoBoxed<'a, game::table, Sqlite>,
+  val: &str,
+  whitelist: bool,
+) -> IntoBoxed<'b, game::table, Sqlite>
+where
+  'a: 'b,
+{
+  let parens_val = "%".to_owned() + val + "%";
+  if whitelist {
+    q.filter(
+      game::title
+        .like(parens_val.clone())
+        .or(game::alternateTitles.like(parens_val.clone()))
+        .or(game::publisher.like(parens_val.clone()))
+        .or(game::developer.like(parens_val)),
+    )
+  } else {
+    q.filter(
+      game::title
+        .not_like(parens_val.clone())
+        .and(game::alternateTitles.not_like(parens_val.clone()))
+        .and(game::publisher.not_like(parens_val.clone()))
+        .and(game::developer.not_like(parens_val)),
+    )
+  }
+}
