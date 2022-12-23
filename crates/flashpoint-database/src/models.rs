@@ -1,6 +1,10 @@
 use crate::schema::game;
 use chrono::NaiveDateTime;
-use diesel::{Insertable, Queryable};
+use diesel::helper_types::IntoBoxed;
+use diesel::prelude::*;
+use diesel::sqlite::Sqlite;
+use diesel::{ExpressionMethods, Insertable, Queryable};
+use flashpoint_macros::TableQueryBuilder;
 use serde::Serialize;
 
 #[derive(Serialize, Queryable, Debug)]
@@ -15,9 +19,9 @@ pub struct ViewGame {
   pub tags_str: String,
 }
 
-#[derive(Serialize, Insertable, Queryable, Debug)]
-#[serde(rename_all = "camelCase")]
+#[derive(TableQueryBuilder, Serialize, Insertable, Queryable, Debug)]
 #[diesel(table_name = game)]
+#[serde(rename_all = "camelCase")]
 pub struct Game {
   pub id: String,
   #[diesel(column_name = parentGameId)]

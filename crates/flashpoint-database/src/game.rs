@@ -1,10 +1,13 @@
+use diesel::helper_types::IntoBoxed;
 use diesel::prelude::*;
+use diesel::sqlite::Sqlite;
 
+use crate::models::GameRelation;
 use crate::models::{Game, TagAlias, ViewGame};
 use crate::schema::game;
 use crate::schema::game_tags_tag;
 use crate::schema::tag_alias;
-use crate::types::DbState;
+use crate::types::{DbState, FilterOpts};
 
 pub fn view_all_games(state: &mut DbState) -> Vec<ViewGame> {
   game::table
@@ -78,4 +81,71 @@ pub fn find_games_with_tag(state: &mut DbState, tag_str: String) -> Vec<Game> {
 
 // apply_tag_filters
 
-// get_game_query
+/// if pageSize is Some, order_by_ascending will be treated as the key.
+fn get_game_query<'a>(
+  filters: &FilterOpts,
+  order_by_ascending: Option<(&GameRelation, bool)>,
+  offset: Option<i64>,
+  page_size: Option<i64>,
+) -> diesel::helper_types::IntoBoxed<'a, game::table, Sqlite> {
+  let mut query = game::table.into_boxed();
+  if let Some(_playlist_id) = &filters.playlist_id {
+    todo!()
+  }
+  if let Some(search) = &filters.search_query {
+    // Whitelist tends to be more restrictive, do it first.
+    for filter in &search.whitelist {
+      query = filter.filter_column(query, true);
+    }
+    for filter in &search.blacklist {
+      query = filter.filter_column(query, false);
+    }
+    for filter in &search.generic_whitelist {
+      query = apply_generic_filter(query, filter, true);
+    }
+    for filter in &search.generic_blacklist {
+      query = apply_generic_filter(query, filter, false);
+    }
+  }
+  if let Some((order_by, ascending)) = order_by_ascending {
+    if let Some(page_size) = page_size {
+      query = order_by.page(query, ascending, page_size)
+    } else {
+      query = order_by.order_query(query, ascending);
+    }
+  }
+  if let Some(offset) = offset {
+    query = query.offset(offset);
+  }
+  query
+}
+
+/// Applies a single filter to four game columns: title, alterateTitles, publisher, and developer.
+/// If whitelist, these are LIKE filters, OR'd together. Otherwise, these are NOT LIKE filters, AND'd together.
+fn apply_generic_filter<'a, 'b>(
+  q: IntoBoxed<'a, game::table, Sqlite>,
+  val: &str,
+  whitelist: bool,
+) -> IntoBoxed<'b, game::table, Sqlite>
+where
+  'a: 'b,
+{
+  let parens_val = "%".to_owned() + val + "%";
+  if whitelist {
+    q.filter(
+      game::title
+        .like(parens_val.clone())
+        .or(game::alternateTitles.like(parens_val.clone()))
+        .or(game::publisher.like(parens_val.clone()))
+        .or(game::developer.like(parens_val)),
+    )
+  } else {
+    q.filter(
+      game::title
+        .not_like(parens_val.clone())
+        .and(game::alternateTitles.not_like(parens_val.clone()))
+        .and(game::publisher.not_like(parens_val.clone()))
+        .and(game::developer.not_like(parens_val)),
+    )
+  }
+}
