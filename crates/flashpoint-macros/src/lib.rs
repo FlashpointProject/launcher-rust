@@ -1,3 +1,6 @@
+//! A crate for holding various proc macros that we use. It's a bit annoying that I'm forced to 
+//! make a separate crate for proc macros, but here we are.
+
 use core::panic;
 
 use convert_case::{Case, Casing};
@@ -8,7 +11,7 @@ use syn::{
   parse_macro_input, punctuated::Punctuated, token::Comma, Attribute, DataEnum, DeriveInput, Field,
   FieldsUnnamed, Ident, Variant,
 };
-
+/// Makes a relation enum out of the struct fields, and generates filtering functions for them.
 #[proc_macro_derive(TableQueryBuilder)]
 pub fn table_query_builder_macro(input: TokenStream) -> TokenStream {
   // Parse the input tokens into a syntax tree
