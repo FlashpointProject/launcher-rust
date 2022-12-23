@@ -1,6 +1,6 @@
 use diesel::SqliteConnection;
 
-use crate::game::GameFilter;
+use crate::models::GameRelation;
 
 #[derive(Debug)]
 pub enum DbErrors {
@@ -31,8 +31,8 @@ pub struct DbState {
 pub struct ParsedSearch {
   pub generic_blacklist: Vec<String>,
   pub generic_whitelist: Vec<String>,
-  pub blacklist: Vec<GameFilter>,
-  pub whitelist: Vec<GameFilter>,
+  pub blacklist: Vec<GameRelation>,
+  pub whitelist: Vec<GameRelation>,
 }
 
 pub struct FilterOpts {

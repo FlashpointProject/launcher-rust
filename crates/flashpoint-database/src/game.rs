@@ -1,8 +1,8 @@
-use chrono::NaiveDateTime;
 use diesel::helper_types::IntoBoxed;
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 
+use crate::models::GameRelation;
 use crate::models::{Game, TagAlias, ViewGame};
 use crate::schema::game;
 use crate::schema::game_tags_tag;
@@ -39,9 +39,6 @@ pub fn find_game(state: &mut DbState, game_id: String) -> Result<Game, diesel::r
 // find_random_games
 
 // find_game_page_keyset
-pub fn find_game_page_keyset(state: &mut DbState, search: FilterOpts) {
-  todo!()
-}
 
 // find_add_app
 
@@ -87,12 +84,12 @@ pub fn find_games_with_tag(state: &mut DbState, tag_str: String) -> Vec<Game> {
 /// if pageSize is Some, order_by_ascending will be treated as the key.
 fn get_game_query<'a>(
   filters: &FilterOpts,
-  order_by_ascending: Option<(&GameFilter, bool)>,
+  order_by_ascending: Option<(&GameRelation, bool)>,
   offset: Option<i64>,
   page_size: Option<i64>,
 ) -> diesel::helper_types::IntoBoxed<'a, game::table, Sqlite> {
   let mut query = game::table.into_boxed();
-  if let Some(playlist_id) = &filters.playlist_id {
+  if let Some(_playlist_id) = &filters.playlist_id {
     todo!()
   }
   if let Some(search) = &filters.search_query {
@@ -123,122 +120,8 @@ fn get_game_query<'a>(
   query
 }
 
-// TODO: proc macro on game?
-/// A single filter on a field of game. Also used as a key for keyset pagination, and a column identifier for OrderBy stuff.
-#[allow(non_camel_case_types)]
-pub enum GameFilter {
-  id(String),
-  parent_game_id(String),
-  title(String),
-  alternate_titles(String),
-  series(String),
-  developer(String),
-  publisher(String),
-  date_added(NaiveDateTime),
-  date_modified(NaiveDateTime),
-  platform(String),
-  broken(bool),
-  extreme(bool),
-  play_mode(String),
-  status(String),
-  notes(String),
-  source(String),
-  application_path(String),
-  launch_command(String),
-  release_date(String),
-  version(String),
-  original_description(String),
-  language(String),
-  library(String),
-  order_title(String),
-  active_data_id(i32),
-  active_data_on_disk(bool),
-  tags_str(String),
-}
-
-impl GameFilter {
-  fn filter_column<'a, 'b>(
-    &self,
-    q: IntoBoxed<'a, game::table, Sqlite>,
-    whitelist: bool,
-  ) -> IntoBoxed<'b, game::table, Sqlite>
-  where
-    'a: 'b,
-  {
-    use diesel::query_dsl::methods::FilterDsl;
-
-    if whitelist {
-      match self {
-        GameFilter::id(s) => FilterDsl::filter(q, game::id.like("%".to_owned() + s + "%")),
-        GameFilter::parent_game_id(s) => {
-          FilterDsl::filter(q, game::parentGameId.like("%".to_owned() + s + "%"))
-        }
-        // TODO: more
-        _ => q,
-      }
-    } else {
-      match self {
-        GameFilter::id(s) => FilterDsl::filter(q, game::id.not_like("%".to_owned() + s + "%")),
-        GameFilter::parent_game_id(s) => {
-          FilterDsl::filter(q, game::parentGameId.not_like("%".to_owned() + s + "%"))
-        }
-        // TODO: more
-        _ => q,
-      }
-    }
-  }
-  fn order_query<'a, 'b>(
-    &self,
-    q: IntoBoxed<'a, game::table, Sqlite>,
-    asc: bool,
-  ) -> IntoBoxed<'b, game::table, Sqlite>
-  where
-    'a: 'b,
-  {
-    if asc {
-      match self {
-        GameFilter::id(_) => q.order(game::id.asc()),
-        // TODO: more
-        _ => q.order(game::title.asc()),
-      }
-    } else {
-      match self {
-        GameFilter::id(_) => q.order(game::id.desc()),
-        // TODO: more
-        _ => q.order(game::title.desc()),
-      }
-    }
-  }
-  fn page<'a, 'b>(
-    &self,
-    q: IntoBoxed<'a, game::table, Sqlite>,
-    asc: bool,
-    page_size: i64,
-  ) -> IntoBoxed<'b, game::table, Sqlite>
-  where
-    'a: 'b,
-  {
-    let k = if asc {
-      match self {
-        GameFilter::title(s) => q
-          .filter(game::title.ge(s.clone()))
-          .order((game::title.asc(), game::id.asc())),
-        // TODO: more
-        _ => q,
-      }
-    } else {
-      match self {
-        GameFilter::title(s) => q
-          .filter(game::title.le(s.clone()))
-          .order((game::title.desc(), game::id.desc())),
-        // TODO: more
-        _ => q,
-      }
-    };
-    k.offset(1).limit(page_size)
-  }
-}
-
+/// Applies a single filter to four game columns: title, alterateTitles, publisher, and developer.
+/// If whitelist, these are LIKE filters, OR'd together. Otherwise, these are NOT LIKE filters, AND'd together.
 fn apply_generic_filter<'a, 'b>(
   q: IntoBoxed<'a, game::table, Sqlite>,
   val: &str,
