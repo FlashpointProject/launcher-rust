@@ -26,18 +26,21 @@ pub fn table_query_builder_macro(input: TokenStream) -> TokenStream {
 
   // Read the attributes to determine overrides for the above defaults.
   let mut non_consumed_attrs: Vec<Attribute> = vec![];
+  let mut inherit_attrs: bool = false;
   for a in input.attrs {
     // If any of these match, the attribute is consumed by our macro, and won't be copied to the enum.
-    if let Some(s) = get_attr_value(&a, "flashpoint_derive", "struct_suffix") {
+    if let Some(s) = get_attr_value(&a, "fp_table_query_builder", "struct_suffix") {
       struct_suffix = s;
     } else if let Some(s) = get_attr_value(&a, "diesel", "table_name") {
       table_name = s;
-    } else if let Some(s) = get_attr_value(&a, "flashpoint_derive", "db_backend") {
+    } else if let Some(s) = get_attr_value(&a, "fp_table_query_builder", "db_backend") {
       db_backend = s;
-    } else if let Some(s) = get_attr_value(&a, "flashpoint_derive", "unique_column") {
+    } else if let Some(s) = get_attr_value(&a, "fp_table_query_builder", "unique_column") {
       let temp = Ident::new(&s, Span::call_site());
       unique_column = Some((s, temp));
-    } else {
+    } else if let Some(s) = get_attr_value(&a, "fp_table_query_builder", "inherit_attr_below") {
+      inherit_attrs = truthiness(&s);
+    } else if inherit_attrs {
       non_consumed_attrs.push(a);
     }
   }
@@ -53,12 +56,12 @@ pub fn table_query_builder_macro(input: TokenStream) -> TokenStream {
   // Split out the struct fields from the parsed data.
   let struct_data = match input.data {
     syn::Data::Struct(d) => d,
-    _ => panic!("MyMacro can only be used on structs!"),
+    _ => panic!("TableQueryBuilder can only be used on structs!"),
   };
   let struct_fields = match struct_data.fields {
     syn::Fields::Named(a) => a.named,
     syn::Fields::Unnamed(a) => a.unnamed,
-    _ => panic!(),
+    _ => panic!("Broken struct fields?"),
   };
 
   // We're going to loop over the fields and build these up.
@@ -153,7 +156,10 @@ pub fn table_query_builder_macro(input: TokenStream) -> TokenStream {
       }
       // If it's an Option<T>, handle it specially. The Some() arm should be normal, the None arm should be IS (NOT) NULL.
       opt if matches!(get_option_inner(&type_str), Some(_)) => {
-        match get_option_inner(opt).unwrap().as_str() {
+        match get_option_inner(opt)
+          .expect("We just checked that this was safe!?!")
+          .as_str()
+        {
           "String" => {
             (
               quote! {
@@ -320,9 +326,8 @@ pub fn table_query_builder_macro(input: TokenStream) -> TokenStream {
     variants: fields_enum,
   };
   // The new enum should inherit the unconsumed attributes, the visibility, and the generics.
-  // Actually nvm, forget about inheriting attrs.
   let built_enum = DeriveInput {
-    attrs: vec![], //non_consumed_attrs,
+    attrs: non_consumed_attrs,
     vis,
     ident: enum_ident,
     generics: input.generics,
@@ -390,4 +395,14 @@ fn get_option_inner(type_str: &str) -> Option<String> {
   let no_option = type_str.strip_prefix("Option")?.trim();
   let no_brackets = no_option.strip_prefix("<")?.strip_suffix(">")?.trim();
   return Some(no_brackets.to_string());
+}
+
+fn truthiness(s: &str) -> bool {
+  match s.clone().to_lowercase().as_str() {
+    "true" => true,
+    "t" => true,
+    "yes" => true,
+    "y" => true,
+    _ => false,
+  }
 }
