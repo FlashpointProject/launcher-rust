@@ -1,8 +1,11 @@
 [workspace]
 members = [
+  "crates/flashpoint-gotd-webserver",
   "crates/flashpoint",
   "crates/flashpoint-core",
   "crates/flashpoint-config",
   "crates/flashpoint-database",
   "crates/flashpoint-macros"
 ]
+default-members = ["crates/flashpoint"]
+
