@@ -1,25 +1,18 @@
 import React from 'react';
+import Checkbox from '@mui/material/Checkbox';
+import TextField from '@mui/material/TextField';
 import { Game } from '../../types';
 import { GameBox } from '../GameBox';
 import { plainToInstance } from 'class-transformer';
+import { Button } from '@mui/material';
+import { UserContext } from '../app';
 
 export function Home() {
   const [gameId, setGameId] = React.useState('');
   const [anonymous, setAnonymous] = React.useState(false);
   const [description, setDescription] = React.useState('');
   const [game, setGame] = React.useState<Game | null>(null);
-  const [username, setUsername] = React.useState<string | undefined>(undefined);
-
-  React.useEffect(() => {
-    fetch('/api/auth/info')
-      .then(async (res) => {
-        if (res.ok) {
-          const identity = await res.json();
-          console.log(identity);
-          setUsername(identity.username);
-        }
-      });
-  }, []);
+  const user = React.useContext(UserContext);
 
   const postSuggestion = React.useCallback(() => {
     if (game && description) {
@@ -66,50 +59,62 @@ export function Home() {
 
   return (
     <div>
-      <h1>Flashpoint GOTD Server</h1>
-      {username ? (
+      {user && user.authenticated ? (
         <>
-          <p>Logged in as {username}</p>
+          <h1>GOTD Suggestion Form</h1>
+          <p>Logged in as {user.username}</p>
           <p>Enter a game ID to get its info:</p>
-          <table>
-            <tr>
-              <td>Game ID: </td>
-              <td>
-                <input onChange={(event) => {
-                  setGameId(event.target.value);
-                }}></input>
-              </td>
-            </tr>
-            <tr>
-              <td>Anonymous: </td>
-              <td>
-                <input type="checkbox" onChange={(event) => {
-                  setAnonymous(event.target.checked);
-                }}></input>
-              </td>
-            </tr>
-            <tr>
-              <td>Description: </td>
-              <td>
-                <input onChange={(event) => {
-                  setDescription(event.target.value);
-                }}></input>
-              </td>
-            </tr>
+          <table className='formTable'>
+            <tbody>
+              <tr>
+                <td>Game ID: </td>
+                <td>
+                  <TextField onChange={(event) => {
+                    console.log('change to ' + event.target.value);
+                    setGameId(event.target.value);
+                  }}></TextField>
+                </td>
+              </tr>
+              <tr>
+                <td>Anonymous: </td>
+                <td>
+                  <Checkbox onChange={(event) => {
+                    setAnonymous(event.target.checked);
+                  }}></Checkbox>
+                </td>
+              </tr>
+              <tr>
+                <td>Description: </td>
+                <td>
+                  <TextField multiline={true} minRows={3} onChange={(event) => {
+                    setDescription(event.target.value);
+                  }}></TextField>
+                </td>
+              </tr>
+            </tbody>
           </table>
           {game && (
             <>
               <GameBox game={game}></GameBox>
               {description && (
-                <button onClick={postSuggestion}>Submit Suggestion</button>
+                <Button
+                  onClick={postSuggestion}
+                  variant="contained">
+                  Submit Suggestion
+                </Button>
               )}
             </>
           )}
         </>
       ) : (
-        <button>
-          <a href="/api/auth/login">Login</a>
-        </button>
+        <>
+          <p>You must be logged in to post suggestions.</p>
+          <Button
+            href="/api/auth/login"
+            variant="contained">
+            Login
+          </Button>
+        </>
       )}
 
     </div >

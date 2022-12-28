@@ -126,9 +126,10 @@ pub async fn login() -> impl Responder {
     .finish()
 }
 
-pub async fn logout(user: Identity, session: Session) -> HttpResponse {
+pub async fn logout(user: Identity, session: Session) -> impl Responder {
   user.logout();
   session.clear();
-  println!("[user] ++++ logout()");
-  HttpResponse::Ok().finish()
+  HttpResponse::TemporaryRedirect()
+    .append_header(("Location", "/"))
+    .finish()
 }
