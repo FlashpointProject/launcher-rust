@@ -32,6 +32,8 @@ export function Home() {
       })
         .then(() => {
           alert('Suggestion submitted!');
+          setGameId('');
+          setDescription('');
         })
         .catch((err) => { alert(`Error submitting suggestion: ${err}`); });
     }

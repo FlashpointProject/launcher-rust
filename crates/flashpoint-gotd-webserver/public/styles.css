@@ -46,11 +46,16 @@ a {
 }
 
 .headerLeft {
+  display: flex;
   font-weight: bold;
   margin: auto;
   margin-left: 1.5rem;
   vertical-align: middle;
   flex-shrink: 0;
+}
+
+.headerLeft > :not(:first-child) {
+  margin-left: 1rem;
 }
 
 .headerRight {
@@ -91,4 +96,18 @@ a {
 .formTable > tbody > tr > td:first-child {
   font-weight: bold;
   margin-right: 0.1rem;
+}
+
+table {
+  border: 1px solid lightgray;
+}
+
+tbody {
+  border-bottom: 1px solid lightgray;
+}
+
+th {
+  border-bottom: 1px solid lightgray;
+  border-right: 1px solid lightgray;
+  padding: 2px 4px;
 }

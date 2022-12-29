@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { createBrowserRouter } from 'react-router-dom';
 import { App } from './components/app';
 import { Home } from './components/pages/Home';
+import { Suggestions } from './components/pages/Suggestions';
 
 const theme = createTheme({
   palette: {
@@ -24,6 +25,10 @@ const router = createBrowserRouter([
     path: '/',
     element: <Home />,
   },
+  {
+    path: '/suggestions',
+    element: <Suggestions />,
+  }
 ]);
 
 root.render(

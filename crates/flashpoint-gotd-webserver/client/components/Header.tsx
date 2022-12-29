@@ -9,6 +9,8 @@ export function Header() {
     <div className='header'>
       <div className='headerLeft'>
         <div>Flashpoint GOTD Server</div>
+        <Button variant="contained" color="secondary" href="/">Submit</Button>
+        <Button variant="contained" color="secondary" href="/suggestions">Suggestions</Button>
       </div>
       <div className='headerRight'>
         {user.authenticated ? (

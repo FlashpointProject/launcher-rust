@@ -2,4 +2,5 @@
 /public/bundle*
 flashpoint.sqlite*
 suggestions.json
+gotd.json
 .env
