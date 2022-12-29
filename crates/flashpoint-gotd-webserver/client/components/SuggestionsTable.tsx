@@ -1,5 +1,7 @@
 import { Button } from '@mui/material';
-import { useReactTable, createColumnHelper, getCoreRowModel, flexRender } from '@tanstack/react-table';
+import { useReactTable, createColumnHelper, getCoreRowModel, flexRender, Row } from '@tanstack/react-table';
+import React from 'react';
+import { User, UserContext } from './app';
 
 export type SuggestionsData = {
   id: string;
@@ -13,9 +15,12 @@ export type SuggestionsData = {
 
 export type SuggestionsTableProps = {
   data: Array<SuggestionsData>;
+  deleteSuggestion: (id: string) => void;
 }
 
 export function SuggestionsTable(props: SuggestionsTableProps) {
+  const user = React.useContext(UserContext);
+
   const columnHelper = createColumnHelper<SuggestionsData>();
 
   const columns = [
@@ -47,12 +52,18 @@ export function SuggestionsTable(props: SuggestionsTableProps) {
         const val = cellProps.getValue();
         if (val) {
           return <span>{val.length} {val.length === 1 ? 'Time' : 'Times'}</span>;
-        } else {
-          return <Button>DOG</Button>;
         }
       }
     })
   ];
+
+  if (user) {
+    columns.push(columnHelper.display({
+      id: 'actions',
+      header: 'Actions',
+      cell: cellProps => <RowActions user={user} deleteFunc={props.deleteSuggestion} row={cellProps.row} />,
+    }));
+  }
 
   const table = useReactTable({ columns, data: props.data, getCoreRowModel: getCoreRowModel() });
 
@@ -89,12 +100,25 @@ export function SuggestionsTable(props: SuggestionsTableProps) {
   );
 }
 
-function formatDateYMD(date: string) {
-  const d = new Date(date);
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-}
-
 function formatDateYMDTime(date: string) {
   const d = new Date(date);
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()} ${d.getHours()}:${d.getMinutes()}:${d.getSeconds()}`;
+}
+
+type RowActionsProps = {
+  user: User;
+  row: Row<SuggestionsData>;
+  deleteFunc: (id: string) => void
+};
+
+function RowActions(props: RowActionsProps) {
+  return (
+    <div>
+      {props.user.admin && (
+        <Button variant='contained' color='error' onClick={() => {
+          props.deleteFunc(props.row.original.id);
+        }}>Delete</Button>
+      )}
+    </div>
+  );
 }

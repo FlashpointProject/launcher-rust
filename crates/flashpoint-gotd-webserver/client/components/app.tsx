@@ -12,6 +12,7 @@ export type AppProps = {
 export type User = {
   username: string;
   authenticated: boolean;
+  admin: boolean;
 }
 
 export function App(props: AppProps) {
@@ -26,11 +27,13 @@ export function App(props: AppProps) {
           setUser({
             username: identity.username,
             authenticated: true,
+            admin: identity.admin
           });
         } else {
           setUser({
             username: '',
             authenticated: false,
+            admin: false,
           });
         }
       });

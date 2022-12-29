@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+  env,
+  sync::{Arc, Mutex},
+};
 
 use actix_files as fs;
 use actix_identity::{Identity, IdentityMiddleware};
@@ -121,6 +124,36 @@ async fn index() -> impl Responder {
   NamedFile::open("public/index.html").unwrap()
 }
 
+async fn delete_suggestion(
+  session: Session,
+  admin_ids: web::Data<Vec<String>>,
+  sugs_id: web::Path<String>,
+  sugs: web::Data<Arc<Mutex<Suggestions>>>,
+  id: Identity,
+) -> Result<web::Json<Suggestion>> {
+  let user = user::get_user(session, id.id().unwrap(), admin_ids.to_vec())
+    .await
+    .map_err(|e| {
+      error::ErrorInternalServerError(format!("Failed to get user from session: {}", e))
+    })?;
+
+  if !user.admin {
+    return Err(error::ErrorForbidden("You are not an admin!"));
+  }
+
+  // remove suggestion with sugs_id id from suggestions
+  let sugs_id = sugs_id.into_inner();
+  let mut sugs = sugs.lock().unwrap();
+  let index = sugs
+    .suggestions
+    .iter()
+    .position(|s| s.suggestion.id == sugs_id)
+    .ok_or(error::ErrorNotFound("Suggestion not found"))?;
+  let sug = sugs.suggestions.remove(index);
+
+  Ok(web::Json(sug.suggestion))
+}
+
 async fn save_suggestion(
   sugs: web::Data<Arc<Mutex<Suggestions>>>,
   form: web::Json<SuggestionRequest>,
@@ -181,6 +214,12 @@ async fn main() -> std::io::Result<()> {
   let gotds: GameOfTheDayFile = serde_json::from_str(&gotd_file).unwrap();
   let gotds_arc = Arc::new(Mutex::new(gotds));
 
+  let admin_ids: Vec<String> = env::var("ADMIN_IDS")
+    .unwrap_or(",".to_string())
+    .split(',')
+    .map(|s| s.to_string())
+    .collect();
+
   let db = flashpoint_database::initialize("./flashpoint.sqlite").unwrap();
   let db_arc = Arc::new(Mutex::new(db));
 
@@ -196,6 +235,7 @@ async fn main() -> std::io::Result<()> {
       .app_data(web::Data::new(db_arc.clone()))
       .app_data(web::Data::new(sugs_arc.clone()))
       .app_data(web::Data::new(gotds_arc.clone()))
+      .app_data(web::Data::new(admin_ids.clone()))
       .service(
         web::scope("/api")
           .service(
@@ -207,6 +247,7 @@ async fn main() -> std::io::Result<()> {
           )
           .route("/game/{gameId}", web::get().to(get_game))
           .route("/suggestion", web::post().to(save_suggestion))
+          .route("/suggestion/{sugs_id}", web::delete().to(delete_suggestion))
           .route("/suggestions", web::get().to(get_suggestions)),
       )
       .route("/suggestions", web::get().to(index))

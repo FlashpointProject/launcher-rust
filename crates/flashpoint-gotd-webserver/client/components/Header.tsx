@@ -11,6 +11,9 @@ export function Header() {
         <div>Flashpoint GOTD Server</div>
         <Button variant="contained" color="secondary" href="/">Submit</Button>
         <Button variant="contained" color="secondary" href="/suggestions">Suggestions</Button>
+        {user.admin && (
+          <Button variant="contained" color="secondary" href="/admin">Admin</Button>
+        )}
       </div>
       <div className='headerRight'>
         {user.authenticated ? (

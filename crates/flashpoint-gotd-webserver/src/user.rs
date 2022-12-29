@@ -13,8 +13,9 @@ pub struct Entry {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User {
-  id: String,
-  username: String,
+  pub id: String,
+  pub username: String,
+  pub admin: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -47,14 +48,28 @@ pub struct DiscordUser {
   discriminator: String,
 }
 
-pub async fn user_info(session: Session, id: Identity) -> Result<web::Json<User>> {
+pub async fn get_user(session: Session, user_id: String, admin_ids: Vec<String>) -> Result<User> {
   let user = User {
-    id: id.id().unwrap_or("".to_string()),
+    id: user_id.clone(),
     username: session
       .get::<String>("username")
       .unwrap_or(None)
       .unwrap_or("".to_string()),
+    admin: if user_id != "" {
+      admin_ids.contains(&user_id)
+    } else {
+      false
+    },
   };
+  Ok(user)
+}
+
+pub async fn user_info(
+  session: Session,
+  id: Identity,
+  admin_ids: web::Data<Vec<String>>,
+) -> Result<web::Json<User>> {
+  let user = get_user(session, id.id().unwrap(), admin_ids.to_vec()).await?;
   Ok(web::Json(user))
 }
 

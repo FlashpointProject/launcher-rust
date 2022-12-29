@@ -14,10 +14,19 @@ export function Suggestions() {
       });
   }, []);
 
+  const deleteSuggestion = React.useCallback((id: string) => {
+    fetch(`/api/suggestion/${id}`, {
+      method: 'DELETE',
+    })
+      .then(() => {
+        setSuggestions(suggestions.filter((s) => s.id !== id));
+      });
+  }, [suggestions]);
+
   return (
     <div className='suggestions'>
       <h1>Suggestions</h1>
-      <SuggestionsTable data={suggestions} />
+      <SuggestionsTable deleteSuggestion={deleteSuggestion} data={suggestions} />
     </div>
   );
 }
