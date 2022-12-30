@@ -2,35 +2,21 @@ import { Button } from '@mui/material';
 import { useReactTable, createColumnHelper, getCoreRowModel, flexRender, Row } from '@tanstack/react-table';
 import React from 'react';
 import { User, UserContext } from './app';
+import { GameOfTheDay } from './pages/Suggestions';
 
-export type SuggestionsData = {
-  id: string;
-  game_id: string;
-  title: string;
-  description: string;
-  author: string;
-  date_submitted: string;
-  assigned_dates: Array<string>;
+export type GotdTableProps = {
+  data: Array<GameOfTheDay>;
+  deleteGotd: (id: string) => void;
 }
 
-export type SuggestionsTableProps = {
-  data: Array<SuggestionsData>;
-  deleteSuggestion: (id: string) => void;
-  selectDate: (suggestionId: string) => void;
-}
-
-export function SuggestionsTable(props: SuggestionsTableProps) {
+export function GotdTable(props: GotdTableProps) {
   const user = React.useContext(UserContext);
 
-  const columnHelper = createColumnHelper<SuggestionsData>();
+  const columnHelper = createColumnHelper<GameOfTheDay>();
 
   const columns = [
-    columnHelper.accessor('game_id', {
+    columnHelper.accessor('id', {
       header: 'Game ID',
-      footer: info => info.column.id,
-    }),
-    columnHelper.accessor('title', {
-      header: 'Title',
       footer: info => info.column.id,
     }),
     columnHelper.accessor('author', {
@@ -41,20 +27,10 @@ export function SuggestionsTable(props: SuggestionsTableProps) {
       header: 'Description',
       footer: info => info.column.id,
     }),
-    columnHelper.accessor('date_submitted', {
+    columnHelper.accessor('date', {
       header: 'Date Submitted',
       footer: info => info.column.id,
-      cell: cellProps => <span>{formatDateYMDTime(cellProps.getValue())}</span>,
-    }),
-    columnHelper.accessor('assigned_dates', {
-      header: 'Assigned Dates',
-      footer: info => info.column.id,
-      cell: cellProps => {
-        const val = cellProps.getValue();
-        if (val) {
-          return <span>{val.length} {val.length === 1 ? 'Time' : 'Times'}</span>;
-        }
-      }
+      cell: cellProps => <span>{formatDateYMD(cellProps.getValue())}</span>,
     })
   ];
 
@@ -62,7 +38,7 @@ export function SuggestionsTable(props: SuggestionsTableProps) {
     columns.push(columnHelper.display({
       id: 'actions',
       header: 'Actions',
-      cell: cellProps => <RowActions user={user} selectDate={props.selectDate} deleteFunc={props.deleteSuggestion} row={cellProps.row} />,
+      cell: cellProps => <RowActions user={user} deleteFunc={props.deleteGotd} row={cellProps.row} />,
     }));
   }
 
@@ -101,16 +77,15 @@ export function SuggestionsTable(props: SuggestionsTableProps) {
   );
 }
 
-function formatDateYMDTime(date: string) {
+function formatDateYMD(date: string) {
   const d = new Date(date);
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()} ${d.getHours()}:${d.getMinutes()}:${d.getSeconds()}`;
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
 type RowActionsProps = {
   user: User;
-  row: Row<SuggestionsData>;
+  row: Row<GameOfTheDay>;
   deleteFunc: (id: string) => void
-  selectDate: (suggestionId: string) => void;
 };
 
 function RowActions(props: RowActionsProps) {
@@ -118,11 +93,8 @@ function RowActions(props: RowActionsProps) {
     <div>
       {props.user.admin && (
         <>
-          <Button variant='contained' color='success' onClick={() => {
-            props.selectDate(props.row.original.id);
-          }}>Assign</Button>
           <Button variant='contained' color='error' onClick={() => {
-            props.deleteFunc(props.row.original.id);
+            props.deleteFunc(props.row.original.date);
           }}>Delete</Button>
         </>
       )}

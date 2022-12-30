@@ -21,6 +21,7 @@ a {
   --flashpoint-cream: #FFE0E4;
   --flashpoint-red-hover: #E85971;
   --flashpoint-red-deactive: #e9425e;
+  --layout__background-faded: #1b1b1cb8;
 }
 
 .main {
@@ -42,7 +43,7 @@ a {
   background-color: var(--flashpoint-red);
   position: fixed;
   top: 0;
-  z-index: 9999;
+  z-index: 999;
 }
 
 .headerLeft {
@@ -110,4 +111,29 @@ th {
   border-bottom: 1px solid lightgray;
   border-right: 1px solid lightgray;
   padding: 2px 4px;
+}
+
+/** Floating Containers */
+.floating-container__wrapper {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  background-color: var(--layout__background-faded);
+}
+
+.floating-container {
+  text-align: center;
+  padding: 1rem;
+  border: 1px solid;
+  overflow: auto;
+  max-height: 90%;
+  max-width: 90%;
+  background-color: var(--flashpoint-cream);
+  border-color: #292929;
 }

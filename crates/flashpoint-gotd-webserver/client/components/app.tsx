@@ -23,7 +23,6 @@ export function App(props: AppProps) {
       .then(async (res) => {
         if (res.ok) {
           const identity = await res.json();
-          console.log(identity);
           setUser({
             username: identity.username,
             authenticated: true,

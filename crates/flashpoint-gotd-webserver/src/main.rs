@@ -7,7 +7,7 @@ use actix_files as fs;
 use actix_identity::{Identity, IdentityMiddleware};
 use actix_session::{storage::CookieSessionStore, Session, SessionMiddleware};
 use actix_web::{cookie::Key, error, web, App, HttpRequest, HttpServer, Responder, Result};
-use chrono::{NaiveDateTime, Utc};
+use chrono::{NaiveDate, NaiveDateTime, Utc};
 use colored::Colorize;
 use dotenv::dotenv;
 use flashpoint_database::{models::Game, types::DbState};
@@ -17,6 +17,11 @@ use uuid::Uuid;
 
 mod user;
 
+#[derive(Deserialize, Serialize, Clone)]
+pub struct SetGotdRequest {
+  date: NaiveDate,
+  suggestion: SuggestionPublic,
+}
 #[derive(Deserialize, Serialize, Clone)]
 pub struct SuggestionRequest {
   id: String,
@@ -32,7 +37,7 @@ pub struct SuggestionPublic {
   title: String,
   description: String,
   date_submitted: NaiveDateTime,
-  assigned_dates: Vec<NaiveDateTime>,
+  assigned_dates: Vec<NaiveDate>,
   author: String,
 }
 
@@ -69,8 +74,7 @@ struct GameOfTheDay {
   id: String,
   author: String,
   description: String,
-  #[serde(with = "gotd_date_format")]
-  date: NaiveDateTime,
+  date: NaiveDate,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -99,7 +103,7 @@ async fn get_suggestions(
       .suggestions
       .iter()
       .map(|s| {
-        let dates: Vec<NaiveDateTime> = gotds
+        let dates: Vec<NaiveDate> = gotds
           .games
           .iter()
           .filter(|g| g.id == s.suggestion.game_id)
@@ -122,6 +126,13 @@ async fn get_suggestions(
 
 async fn index() -> impl Responder {
   NamedFile::open("public/index.html").unwrap()
+}
+
+async fn get_gotds(
+  gotds: web::Data<Arc<Mutex<GameOfTheDayFile>>>,
+) -> Result<web::Json<GameOfTheDayFile>> {
+  let gotds = gotds.lock().unwrap();
+  Ok(web::Json(gotds.clone()))
 }
 
 async fn delete_suggestion(
@@ -150,8 +161,89 @@ async fn delete_suggestion(
     .position(|s| s.suggestion.id == sugs_id)
     .ok_or(error::ErrorNotFound("Suggestion not found"))?;
   let sug = sugs.suggestions.remove(index);
+  let sugs: Suggestions = Suggestions {
+    suggestions: sugs.suggestions.clone(),
+  };
+  std::fs::write("./suggestions.json", serde_json::to_string(&sugs).unwrap())
+    .map_err(|e| error::ErrorInternalServerError(e))?;
 
   Ok(web::Json(sug.suggestion))
+}
+
+async fn delete_gotd(
+  session: Session,
+  admin_ids: web::Data<Vec<String>>,
+  date: web::Path<NaiveDate>,
+  gotds: web::Data<Arc<Mutex<GameOfTheDayFile>>>,
+  id: Identity,
+) -> Result<web::Json<GameOfTheDay>> {
+  let user = user::get_user(session, id.id().unwrap(), admin_ids.to_vec())
+    .await
+    .map_err(|e| {
+      error::ErrorInternalServerError(format!("Failed to get user from session: {}", e))
+    })?;
+
+  if !user.admin {
+    return Err(error::ErrorForbidden("You are not an admin!"));
+  }
+
+  // remove gotd with date from gotds
+  let mut gotds = gotds.lock().unwrap();
+  let date = date.into_inner();
+  let index = gotds
+    .games
+    .iter()
+    .position(|g| g.date == date)
+    .ok_or(error::ErrorNotFound("Date not found"))?;
+  let gotd = gotds.games.remove(index);
+  let gotds = GameOfTheDayFile {
+    games: gotds.games.clone(),
+  };
+  std::fs::write("./gotd.json", serde_json::to_string_pretty(&gotds).unwrap())
+    .map_err(|e| error::ErrorInternalServerError(e))?;
+
+  Ok(web::Json(gotd))
+}
+
+async fn set_gotd(
+  db: web::Data<Arc<Mutex<DbState>>>,
+  form: web::Json<SetGotdRequest>,
+  gotds: web::Data<Arc<Mutex<GameOfTheDayFile>>>,
+  id: Identity,
+  session: Session,
+  admin_ids: web::Data<Vec<String>>,
+) -> Result<&'static str> {
+  let user = user::get_user(session, id.id().unwrap(), admin_ids.to_vec())
+    .await
+    .map_err(|e| {
+      error::ErrorInternalServerError(format!("Failed to get user from session: {}", e))
+    })?;
+  if !user.admin {
+    return Err(error::ErrorForbidden("You are not an admin!"));
+  }
+
+  let mut db = db.lock().unwrap();
+  let _ = flashpoint_database::game::find_game(&mut db, form.suggestion.game_id.clone())
+    .map_err(|e| error::ErrorBadRequest(e))?;
+
+  let mut gotds = gotds.lock().unwrap();
+  if let Some(idx) = gotds.games.iter().position(|g| g.date == form.date) {
+    gotds.games.remove(idx);
+  }
+
+  gotds.games.push(GameOfTheDay {
+    id: form.suggestion.game_id.clone(),
+    author: form.suggestion.author.clone(),
+    description: form.suggestion.description.clone(),
+    date: form.date,
+  });
+  let gotds = GameOfTheDayFile {
+    games: gotds.games.clone(),
+  };
+  std::fs::write("./gotd.json", serde_json::to_string_pretty(&gotds).unwrap())
+    .map_err(|e| error::ErrorInternalServerError(e))?;
+
+  Ok("ok")
 }
 
 async fn save_suggestion(
@@ -187,11 +279,8 @@ async fn save_suggestion(
     let sugs: Suggestions = Suggestions {
       suggestions: sugs.suggestions.clone(),
     };
-    std::fs::write(
-      "./suggestions.json",
-      serde_json::to_string_pretty(&sugs).unwrap(),
-    )
-    .map_err(|e| error::ErrorInternalServerError(e))?;
+    std::fs::write("./suggestions.json", serde_json::to_string(&sugs).unwrap())
+      .map_err(|e| error::ErrorInternalServerError(e))?;
   }
   Ok("ok")
 }
@@ -248,54 +337,16 @@ async fn main() -> std::io::Result<()> {
           .route("/game/{gameId}", web::get().to(get_game))
           .route("/suggestion", web::post().to(save_suggestion))
           .route("/suggestion/{sugs_id}", web::delete().to(delete_suggestion))
-          .route("/suggestions", web::get().to(get_suggestions)),
+          .route("/suggestions", web::get().to(get_suggestions))
+          .route("/gotd/{date}", web::delete().to(delete_gotd))
+          .route("/gotd", web::post().to(set_gotd))
+          .route("/gotd", web::get().to(get_gotds)),
       )
+      .route("/gotd", web::get().to(index))
       .route("/suggestions", web::get().to(index))
       .service(fs::Files::new("/", "./public/").index_file("index.html"))
   })
   .bind((addr, port))?
   .run()
   .await
-}
-
-mod gotd_date_format {
-  use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
-  use serde::{self, Deserialize, Deserializer, Serializer};
-
-  const FORMAT: &'static str = "%Y-%m-%d";
-
-  // The signature of a serialize_with function must follow the pattern:
-  //
-  //    fn serialize<S>(&T, S) -> Result<S::Ok, S::Error>
-  //    where
-  //        S: Serializer
-  //
-  // although it may also be generic over the input types T.
-  pub fn serialize<S>(date: &NaiveDateTime, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: Serializer,
-  {
-    let s = format!("{}", date.format(FORMAT));
-    serializer.serialize_str(&s)
-  }
-
-  // The signature of a deserialize_with function must follow the pattern:
-  //
-  //    fn deserialize<'de, D>(D) -> Result<T, D::Error>
-  //    where
-  //        D: Deserializer<'de>
-  //
-  // although it may also be generic over the output types T.
-  pub fn deserialize<'de, D>(deserializer: D) -> Result<NaiveDateTime, D::Error>
-  where
-    D: Deserializer<'de>,
-  {
-    let s = String::deserialize(deserializer)?;
-    NaiveDate::parse_from_str(&s, FORMAT)
-      .map_err(serde::de::Error::custom)
-      .map(|d| {
-        let time = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
-        NaiveDateTime::new(d, time)
-      })
-  }
 }

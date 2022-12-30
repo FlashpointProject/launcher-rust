@@ -5,6 +5,8 @@ import { createBrowserRouter } from 'react-router-dom';
 import { App } from './components/app';
 import { Home } from './components/pages/Home';
 import { Suggestions } from './components/pages/Suggestions';
+import type { } from '@mui/x-date-pickers/themeAugmentation';
+import { Gotds } from './components/pages/Gotds';
 
 const theme = createTheme({
   palette: {
@@ -28,6 +30,10 @@ const router = createBrowserRouter([
   {
     path: '/suggestions',
     element: <Suggestions />,
+  },
+  {
+    path: '/gotd',
+    element: <Gotds />,
   }
 ]);
 
