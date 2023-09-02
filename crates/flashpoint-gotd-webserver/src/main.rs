@@ -88,7 +88,10 @@ async fn get_game(
 ) -> Result<web::Json<Game>> {
   let mut db = db.lock().unwrap();
   let game = flashpoint_database::game::find_game(&mut db, game_id.into_inner())
-    .map_err(|e| error::ErrorBadRequest(e))?;
+    .map_err(|e| {
+      eprintln!("{}", e);
+      error::ErrorBadRequest(e)
+    })?;
   Ok(web::Json(game))
 }
 
@@ -164,7 +167,7 @@ async fn delete_suggestion(
   let sugs: Suggestions = Suggestions {
     suggestions: sugs.suggestions.clone(),
   };
-  std::fs::write("./suggestions.json", serde_json::to_string(&sugs).unwrap())
+  std::fs::write("/data/suggestions.json", serde_json::to_string(&sugs).unwrap())
     .map_err(|e| error::ErrorInternalServerError(e))?;
 
   Ok(web::Json(sug.suggestion))
@@ -199,7 +202,7 @@ async fn delete_gotd(
   let gotds = GameOfTheDayFile {
     games: gotds.games.clone(),
   };
-  std::fs::write("./gotd.json", serde_json::to_string_pretty(&gotds).unwrap())
+  std::fs::write("/live/gotd.json", serde_json::to_string_pretty(&gotds).unwrap())
     .map_err(|e| error::ErrorInternalServerError(e))?;
 
   Ok(web::Json(gotd))
@@ -240,7 +243,7 @@ async fn set_gotd(
   let gotds = GameOfTheDayFile {
     games: gotds.games.clone(),
   };
-  std::fs::write("./gotd.json", serde_json::to_string_pretty(&gotds).unwrap())
+  std::fs::write("/live/gotd.json", serde_json::to_string_pretty(&gotds).unwrap())
     .map_err(|e| error::ErrorInternalServerError(e))?;
 
   Ok("ok")
@@ -265,12 +268,7 @@ async fn save_suggestion(
         date_submitted: Utc::now().naive_utc(),
         title: form.title.clone(),
         description: form.description.clone(),
-        author: session
-          .get::<String>("username")
-          .map_err(|e| {
-            error::ErrorInternalServerError(format!("Failed to get username from session: {}", e))
-          })?
-          .unwrap(),
+        author: get_username_or_global_name(&session)?,
         author_id: id.id().unwrap(),
         anonymous: form.anonymous,
       },
@@ -279,27 +277,34 @@ async fn save_suggestion(
     let sugs: Suggestions = Suggestions {
       suggestions: sugs.suggestions.clone(),
     };
-    std::fs::write("./suggestions.json", serde_json::to_string(&sugs).unwrap())
+    std::fs::write("/data/suggestions.json", serde_json::to_string(&sugs).unwrap())
       .map_err(|e| error::ErrorInternalServerError(e))?;
   }
   Ok("ok")
+}
+
+fn get_username_or_global_name(session: &Session) -> Result<String, actix_web::Error> {
+  match session.get::<Option<String>>("global_name").map_err(|e| {error::ErrorInternalServerError(format!("Failed to get username from session: {}", e))})?.unwrap() {
+    Some(name) => Ok(name),
+    None => Ok(session.get::<String>("username").map_err(|e| {error::ErrorInternalServerError(format!("Failed to get username from session: {}", e))})?.unwrap()),
+  }
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
   dotenv().ok();
   std::env::set_var("RUST_LOG", "actix_web=debug");
-  let addr = "127.0.0.1";
-  let port = 8080;
+  let addr = "0.0.0.0";
+  let port = 80;
   let link = format!("http://{}:{}", addr, port).blue();
   println!("Starting webserver on {}", link);
 
   let sugs_file =
-    std::fs::read_to_string("./suggestions.json").unwrap_or("{ \"suggestions\": [] }".to_string());
+    std::fs::read_to_string("/data/suggestions.json").unwrap_or("{ \"suggestions\": [] }".to_string());
   let suggestions: Suggestions = serde_json::from_str(&sugs_file).unwrap();
   let sugs_arc = Arc::new(Mutex::new(suggestions));
 
-  let gotd_file = std::fs::read_to_string("./gotd.json").unwrap_or("{ \"games\": [] }".to_string());
+  let gotd_file = std::fs::read_to_string("/live/gotd.json").unwrap_or("{ \"games\": [] }".to_string());
   let gotds: GameOfTheDayFile = serde_json::from_str(&gotd_file).unwrap();
   let gotds_arc = Arc::new(Mutex::new(gotds));
 
@@ -309,7 +314,7 @@ async fn main() -> std::io::Result<()> {
     .map(|s| s.to_string())
     .collect();
 
-  let db = flashpoint_database::initialize("./flashpoint.sqlite").unwrap();
+  let db = flashpoint_database::initialize("/data/flashpoint.sqlite").unwrap();
   let db_arc = Arc::new(Mutex::new(db));
 
   let secret_key = Key::generate();

@@ -45,6 +45,7 @@ pub struct DiscordToken {
 pub struct DiscordUser {
   id: String,
   username: String,
+  global_name: Option<String>,
   discriminator: String,
 }
 
@@ -120,6 +121,7 @@ pub async fn callback(
   // Store in session
   Identity::login(&req.extensions(), identity.id.clone()).expect("Failed to store identity");
   session.insert("username", identity.username.clone())?;
+  session.insert("global_name", identity.global_name.clone())?;
 
   Ok(
     HttpResponse::TemporaryRedirect()

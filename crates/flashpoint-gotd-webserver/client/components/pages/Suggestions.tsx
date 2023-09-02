@@ -80,6 +80,15 @@ export function Suggestions() {
           );
           setSelecting(null);
           setDate('');
+          // Update taken dates
+          const newGotds = [...gotds];
+          newGotds.push({
+            id: suggestion.game_id,
+            author: suggestion.author,
+            description: suggestion.description,
+            date: moment(date).format('YYYY-MM-DD'),
+          });
+          setGotds(newGotds);
         })
         .catch((err) => {
           alert(`Error assigning suggestion: ${err}`);
